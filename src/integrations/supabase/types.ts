@@ -14,94 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
-      company_profile: {
+      companies: {
         Row: {
-          company_name: string
+          channels_enabled: string[]
           created_at: string
+          customer_types: string[]
           differentiators: string[]
-          service_area: string
+          id: string
+          name: string
+          owner_user_id: string
+          service_area: string[]
           service_lines: Json
           standard_ctas: Json
           trade: string
           updated_at: string
-          user_id: string
-          voice_sample: string
+          voice_examples: Json
+          voice_tone_keywords: string[]
         }
         Insert: {
-          company_name?: string
+          channels_enabled?: string[]
           created_at?: string
+          customer_types?: string[]
           differentiators?: string[]
-          service_area?: string
+          id?: string
+          name?: string
+          owner_user_id: string
+          service_area?: string[]
           service_lines?: Json
           standard_ctas?: Json
           trade?: string
           updated_at?: string
-          user_id: string
-          voice_sample?: string
+          voice_examples?: Json
+          voice_tone_keywords?: string[]
         }
         Update: {
-          company_name?: string
+          channels_enabled?: string[]
           created_at?: string
+          customer_types?: string[]
           differentiators?: string[]
-          service_area?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          service_area?: string[]
           service_lines?: Json
           standard_ctas?: Json
           trade?: string
           updated_at?: string
-          user_id?: string
-          voice_sample?: string
+          voice_examples?: Json
+          voice_tone_keywords?: string[]
         }
         Relationships: []
       }
-      content_items: {
+      content_assets: {
         Row: {
-          approved_at: string | null
-          body_md: string
-          channel: Database["public"]["Enums"]["content_channel"]
-          exported_at: string | null
-          generated_at: string
+          body: string
+          channel: string
+          created_at: string
+          cta_id: string | null
+          flagged_unknowns: Json
+          generation_metadata: Json
+          hashtags: string[]
+          headline: string | null
           id: string
-          intent: Database["public"]["Enums"]["content_intent"]
+          intent_id: string
+          length_variant: string
           project_id: string
-          status: Database["public"]["Enums"]["content_status"]
-          title: string | null
-          unresolved_confirms: Json
+          status: string
+          suggested_media: string[]
+          tone_overrides: string | null
           updated_at: string
-          user_id: string
+          version_history: Json
         }
         Insert: {
-          approved_at?: string | null
-          body_md?: string
-          channel: Database["public"]["Enums"]["content_channel"]
-          exported_at?: string | null
-          generated_at?: string
+          body?: string
+          channel: string
+          created_at?: string
+          cta_id?: string | null
+          flagged_unknowns?: Json
+          generation_metadata?: Json
+          hashtags?: string[]
+          headline?: string | null
           id?: string
-          intent: Database["public"]["Enums"]["content_intent"]
+          intent_id: string
+          length_variant?: string
           project_id: string
-          status?: Database["public"]["Enums"]["content_status"]
-          title?: string | null
-          unresolved_confirms?: Json
+          status?: string
+          suggested_media?: string[]
+          tone_overrides?: string | null
           updated_at?: string
-          user_id: string
+          version_history?: Json
         }
         Update: {
-          approved_at?: string | null
-          body_md?: string
-          channel?: Database["public"]["Enums"]["content_channel"]
-          exported_at?: string | null
-          generated_at?: string
+          body?: string
+          channel?: string
+          created_at?: string
+          cta_id?: string | null
+          flagged_unknowns?: Json
+          generation_metadata?: Json
+          hashtags?: string[]
+          headline?: string | null
           id?: string
-          intent?: Database["public"]["Enums"]["content_intent"]
+          intent_id?: string
+          length_variant?: string
           project_id?: string
-          status?: Database["public"]["Enums"]["content_status"]
-          title?: string | null
-          unresolved_confirms?: Json
+          status?: string
+          suggested_media?: string[]
+          tone_overrides?: string | null
           updated_at?: string
-          user_id?: string
+          version_history?: Json
         }
         Relationships: [
           {
-            foreignKeyName: "content_items_project_id_fkey"
+            foreignKeyName: "content_assets_intent_id_fkey"
+            columns: ["intent_id"]
+            isOneToOne: false
+            referencedRelation: "content_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -109,28 +140,34 @@ export type Database = {
           },
         ]
       }
-      project_answers: {
+      content_intents: {
         Row: {
+          created_at: string
+          id: string
+          intent_type: string
+          notes: Json
           project_id: string
-          question_key: string
           updated_at: string
-          value: Json | null
         }
         Insert: {
+          created_at?: string
+          id?: string
+          intent_type: string
+          notes?: Json
           project_id: string
-          question_key: string
           updated_at?: string
-          value?: Json | null
         }
         Update: {
+          created_at?: string
+          id?: string
+          intent_type?: string
+          notes?: Json
           project_id?: string
-          question_key?: string
           updated_at?: string
-          value?: Json | null
         }
         Relationships: [
           {
-            foreignKeyName: "project_answers_project_id_fkey"
+            foreignKeyName: "content_intents_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -138,37 +175,37 @@ export type Database = {
           },
         ]
       }
-      project_photos: {
+      media: {
         Row: {
           caption: string | null
           created_at: string
           id: string
           project_id: string
-          storage_path: string
-          tag: Database["public"]["Enums"]["photo_tag"]
-          user_id: string
+          tag: string
+          type: string
+          url: string
         }
         Insert: {
           caption?: string | null
           created_at?: string
           id?: string
           project_id: string
-          storage_path: string
-          tag: Database["public"]["Enums"]["photo_tag"]
-          user_id: string
+          tag: string
+          type: string
+          url: string
         }
         Update: {
           caption?: string | null
           created_at?: string
           id?: string
           project_id?: string
-          storage_path?: string
-          tag?: Database["public"]["Enums"]["photo_tag"]
-          user_id?: string
+          tag?: string
+          type?: string
+          url?: string
         }
         Relationships: [
           {
-            foreignKeyName: "project_photos_project_id_fkey"
+            foreignKeyName: "media_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -178,59 +215,106 @@ export type Database = {
       }
       projects: {
         Row: {
+          before_state: string | null
+          company_id: string
+          completed_at: string | null
           created_at: string
+          customer_quote: string | null
           customer_type: string | null
+          equipment_used: string[]
+          homeowner_misconception: string | null
           id: string
-          service_line: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          title: string
+          interview_state: Json
+          lesson_learned: string | null
+          location_city: string | null
+          location_neighborhood: string | null
+          location_region: string | null
+          materials_used: string[]
+          name: string
+          outcome: string | null
+          scope_performed: string | null
+          service_line_id: string | null
+          service_type_detail: string | null
+          started_at: string | null
+          status: string
+          unusual_details: string | null
           updated_at: string
-          user_id: string
-          worthiness_tag: Database["public"]["Enums"]["worthiness_tag"] | null
+          worthiness_tag: string | null
         }
         Insert: {
+          before_state?: string | null
+          company_id: string
+          completed_at?: string | null
           created_at?: string
+          customer_quote?: string | null
           customer_type?: string | null
+          equipment_used?: string[]
+          homeowner_misconception?: string | null
           id?: string
-          service_line?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          title?: string
+          interview_state?: Json
+          lesson_learned?: string | null
+          location_city?: string | null
+          location_neighborhood?: string | null
+          location_region?: string | null
+          materials_used?: string[]
+          name?: string
+          outcome?: string | null
+          scope_performed?: string | null
+          service_line_id?: string | null
+          service_type_detail?: string | null
+          started_at?: string | null
+          status?: string
+          unusual_details?: string | null
           updated_at?: string
-          user_id: string
-          worthiness_tag?: Database["public"]["Enums"]["worthiness_tag"] | null
+          worthiness_tag?: string | null
         }
         Update: {
+          before_state?: string | null
+          company_id?: string
+          completed_at?: string | null
           created_at?: string
+          customer_quote?: string | null
           customer_type?: string | null
+          equipment_used?: string[]
+          homeowner_misconception?: string | null
           id?: string
-          service_line?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          title?: string
+          interview_state?: Json
+          lesson_learned?: string | null
+          location_city?: string | null
+          location_neighborhood?: string | null
+          location_region?: string | null
+          materials_used?: string[]
+          name?: string
+          outcome?: string | null
+          scope_performed?: string | null
+          service_line_id?: string | null
+          service_type_detail?: string | null
+          started_at?: string | null
+          status?: string
+          unusual_details?: string | null
           updated_at?: string
-          user_id?: string
-          worthiness_tag?: Database["public"]["Enums"]["worthiness_tag"] | null
+          worthiness_tag?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      user_owns_company: { Args: { _company_id: string }; Returns: boolean }
+      user_owns_project: { Args: { _project_id: string }; Returns: boolean }
     }
     Enums: {
-      content_channel: "seo_blog" | "facebook" | "instagram" | "case_study"
-      content_intent: "educational" | "seo" | "social_proof" | "process"
-      content_status: "draft" | "approved" | "exported"
-      photo_tag: "before" | "after" | "process" | "detail"
-      project_status: "triaging" | "interviewing" | "ready" | "archived"
-      worthiness_tag:
-        | "unusual_problem"
-        | "dramatic_before_after"
-        | "customer_stressed"
-        | "taught_me_something"
-        | "common_misconception"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -357,19 +441,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      content_channel: ["seo_blog", "facebook", "instagram", "case_study"],
-      content_intent: ["educational", "seo", "social_proof", "process"],
-      content_status: ["draft", "approved", "exported"],
-      photo_tag: ["before", "after", "process", "detail"],
-      project_status: ["triaging", "interviewing", "ready", "archived"],
-      worthiness_tag: [
-        "unusual_problem",
-        "dramatic_before_after",
-        "customer_stressed",
-        "taught_me_something",
-        "common_misconception",
-      ],
-    },
+    Enums: {},
   },
 } as const
