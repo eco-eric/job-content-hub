@@ -18,6 +18,7 @@ import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
+import { Route as AuthenticatedProjectsProjectIdPhotosRouteImport } from './routes/_authenticated/projects.$projectId.photos'
 import { Route as AuthenticatedProjectsProjectIdInterviewRouteImport } from './routes/_authenticated/projects.$projectId.interview'
 
 const LoginRoute = LoginRouteImport.update({
@@ -66,6 +67,12 @@ const AuthenticatedProjectsProjectIdRoute =
     path: '/projects/$projectId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedProjectsProjectIdPhotosRoute =
+  AuthenticatedProjectsProjectIdPhotosRouteImport.update({
+    id: '/photos',
+    path: '/photos',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRoute,
+  } as any)
 const AuthenticatedProjectsProjectIdInterviewRoute =
   AuthenticatedProjectsProjectIdInterviewRouteImport.update({
     id: '/interview',
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
+  '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +102,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
+  '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +116,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
   '/_authenticated/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
+  '/_authenticated/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/projects/$projectId/interview'
+    | '/projects/$projectId/photos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/new'
     | '/projects/$projectId/interview'
+    | '/projects/$projectId/photos'
   id:
     | '__root__'
     | '/'
@@ -143,6 +155,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/projects/new'
     | '/_authenticated/projects/$projectId/interview'
+    | '/_authenticated/projects/$projectId/photos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -216,6 +229,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/$projectId/photos': {
+      id: '/_authenticated/projects/$projectId/photos'
+      path: '/photos'
+      fullPath: '/projects/$projectId/photos'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdPhotosRouteImport
+      parentRoute: typeof AuthenticatedProjectsProjectIdRoute
+    }
     '/_authenticated/projects/$projectId/interview': {
       id: '/_authenticated/projects/$projectId/interview'
       path: '/interview'
@@ -228,12 +248,15 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedProjectsProjectIdRouteChildren {
   AuthenticatedProjectsProjectIdInterviewRoute: typeof AuthenticatedProjectsProjectIdInterviewRoute
+  AuthenticatedProjectsProjectIdPhotosRoute: typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
 
 const AuthenticatedProjectsProjectIdRouteChildren: AuthenticatedProjectsProjectIdRouteChildren =
   {
     AuthenticatedProjectsProjectIdInterviewRoute:
       AuthenticatedProjectsProjectIdInterviewRoute,
+    AuthenticatedProjectsProjectIdPhotosRoute:
+      AuthenticatedProjectsProjectIdPhotosRoute,
   }
 
 const AuthenticatedProjectsProjectIdRouteWithChildren =
