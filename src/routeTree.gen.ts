@@ -20,6 +20,7 @@ import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenti
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedProjectsProjectIdPhotosRouteImport } from './routes/_authenticated/projects.$projectId.photos'
 import { Route as AuthenticatedProjectsProjectIdInterviewRouteImport } from './routes/_authenticated/projects.$projectId.interview'
+import { Route as AuthenticatedProjectsProjectIdGenerateRouteImport } from './routes/_authenticated/projects.$projectId.generate'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -79,6 +80,12 @@ const AuthenticatedProjectsProjectIdInterviewRoute =
     path: '/interview',
     getParentRoute: () => AuthenticatedProjectsProjectIdRoute,
   } as any)
+const AuthenticatedProjectsProjectIdGenerateRoute =
+  AuthenticatedProjectsProjectIdGenerateRouteImport.update({
+    id: '/generate',
+    path: '/generate',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
@@ -101,6 +109,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
@@ -115,6 +124,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/_authenticated/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/_authenticated/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/_authenticated/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
   fileRoutesByTo: FileRoutesByTo
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
   id:
@@ -154,6 +166,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/projects/new'
+    | '/_authenticated/projects/$projectId/generate'
     | '/_authenticated/projects/$projectId/interview'
     | '/_authenticated/projects/$projectId/photos'
   fileRoutesById: FileRoutesById
@@ -243,16 +256,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdInterviewRouteImport
       parentRoute: typeof AuthenticatedProjectsProjectIdRoute
     }
+    '/_authenticated/projects/$projectId/generate': {
+      id: '/_authenticated/projects/$projectId/generate'
+      path: '/generate'
+      fullPath: '/projects/$projectId/generate'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdGenerateRouteImport
+      parentRoute: typeof AuthenticatedProjectsProjectIdRoute
+    }
   }
 }
 
 interface AuthenticatedProjectsProjectIdRouteChildren {
+  AuthenticatedProjectsProjectIdGenerateRoute: typeof AuthenticatedProjectsProjectIdGenerateRoute
   AuthenticatedProjectsProjectIdInterviewRoute: typeof AuthenticatedProjectsProjectIdInterviewRoute
   AuthenticatedProjectsProjectIdPhotosRoute: typeof AuthenticatedProjectsProjectIdPhotosRoute
 }
 
 const AuthenticatedProjectsProjectIdRouteChildren: AuthenticatedProjectsProjectIdRouteChildren =
   {
+    AuthenticatedProjectsProjectIdGenerateRoute:
+      AuthenticatedProjectsProjectIdGenerateRoute,
     AuthenticatedProjectsProjectIdInterviewRoute:
       AuthenticatedProjectsProjectIdInterviewRoute,
     AuthenticatedProjectsProjectIdPhotosRoute:
