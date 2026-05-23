@@ -107,7 +107,7 @@ function ContentEditor() {
           hashtags: result.hashtags ?? [],
           length_variant: overrideLength ?? length,
           tone_overrides: overrideTone === undefined ? tone : overrideTone,
-          version_history,
+          version_history: version_history as never,
           generation_metadata: { generated_at: new Date().toISOString(), prompt_version: "v0-stub", model: "stub" },
         })
         .eq("id", contentId);
