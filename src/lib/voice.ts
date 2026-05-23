@@ -5,11 +5,12 @@ export type VoiceRecognizer = {
   supported: boolean;
 };
 
+interface SRResultEvent { results: { [i: number]: { [j: number]: { transcript: string } } } }
 interface SRInstance {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onresult: ((e: SRResultEvent) => void) | null;
   start: () => void;
   stop: () => void;
 }
@@ -27,7 +28,7 @@ export function createRecognizer(onResult: (text: string) => void): VoiceRecogni
   r.continuous = false;
   r.interimResults = false;
   r.lang = "en-US";
-  r.onresult = (e: SpeechRecognitionEvent) => {
+  r.onresult = (e: SRResultEvent) => {
     const t = e.results[0]?.[0]?.transcript ?? "";
     if (t) onResult(t);
   };
