@@ -104,7 +104,7 @@ function Interview() {
     const state = computeState(questions, draftProject);
     payload.interview_state = state;
     if (project.status === "triaging" || project.status === "draft") payload.status = "interviewing";
-    await supabase.from("projects").update(payload).eq("id", projectId);
+    await supabase.from("projects").update(payload as never).eq("id", projectId);
     qc.invalidateQueries({ queryKey: ["project", projectId] });
   };
 

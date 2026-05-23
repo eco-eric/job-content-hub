@@ -42,10 +42,10 @@ function ProjectHub() {
   if (!project) return <p className="text-sm text-muted-foreground">Project not found.</p>;
 
   const questions = questionsFor(project.worthiness_tag);
-  const answered = questions.filter(q => isFilled((project as Record<string, unknown>)[q.key], ARRAY_COLUMNS.has(q.key))).length;
+  const answered = questions.filter(q => isFilled((project as Record<string, unknown>)[q.column], ARRAY_COLUMNS.has(q.column))).length;
   const requiredDone = questions
     .filter(q => q.required)
-    .every(q => isFilled((project as Record<string, unknown>)[q.key], ARRAY_COLUMNS.has(q.key)));
+    .every(q => isFilled((project as Record<string, unknown>)[q.column], ARRAY_COLUMNS.has(q.column)));
   const tagLabel = WORTHINESS_TAGS.find(t => t.id === project.worthiness_tag)?.label;
 
   const markReady = async () => {
