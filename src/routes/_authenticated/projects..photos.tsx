@@ -7,7 +7,7 @@ import { PageHeader, Card, Chip, SecondaryButton } from "@/components/AppShell";
 import { PHOTO_TAGS } from "@/lib/constants";
 import { Trash2, Upload } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/projects/$projectId/photos")({
+export const Route = createFileRoute("/_authenticated/projects/photos")({
   component: Photos,
 });
 

@@ -6,7 +6,7 @@ import { PageHeader, Card, PrimaryButton, SecondaryButton, StatusBadge } from "@
 import { INTENTS, CHANNELS } from "@/lib/constants";
 import { Copy, Download, AlertCircle } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/content/$contentId")({
+export const Route = createFileRoute("/_authenticated/content/")({
   component: ContentEditor,
 });
 

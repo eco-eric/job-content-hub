@@ -6,7 +6,7 @@ import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/A
 import { INTENTS, CHANNELS } from "@/lib/constants";
 import { generateContent } from "@/lib/generation";
 
-export const Route = createFileRoute("/_authenticated/projects/$projectId/generate")({
+export const Route = createFileRoute("/_authenticated/projects/generate")({
   component: Generate,
 });
 

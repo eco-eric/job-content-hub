@@ -16,9 +16,14 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedProjectsPhotosRouteImport } from './routes/_authenticated/projects..photos'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
+import { Route as AuthenticatedProjectsInterviewRouteImport } from './routes/_authenticated/projects..interview'
+import { Route as AuthenticatedProjectsGenerateRouteImport } from './routes/_authenticated/projects..generate'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedContentContentIdRouteImport } from './routes/_authenticated/content.$contentId'
+import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects.'
+import { Route as AuthenticatedContentRouteImport } from './routes/_authenticated/content.'
 import { Route as AuthenticatedProjectsProjectIdPhotosRouteImport } from './routes/_authenticated/projects.$projectId.photos'
 import { Route as AuthenticatedProjectsProjectIdInterviewRouteImport } from './routes/_authenticated/projects.$projectId.interview'
 import { Route as AuthenticatedProjectsProjectIdGenerateRouteImport } from './routes/_authenticated/projects.$projectId.generate'
@@ -57,10 +62,28 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedProjectsPhotosRoute =
+  AuthenticatedProjectsPhotosRouteImport.update({
+    id: '/projects/photos',
+    path: '/projects/photos',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProjectsNewRoute =
   AuthenticatedProjectsNewRouteImport.update({
     id: '/projects/new',
     path: '/projects/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsInterviewRoute =
+  AuthenticatedProjectsInterviewRouteImport.update({
+    id: '/projects/interview',
+    path: '/projects/interview',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsGenerateRoute =
+  AuthenticatedProjectsGenerateRouteImport.update({
+    id: '/projects/generate',
+    path: '/projects/generate',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProjectsProjectIdRoute =
@@ -75,6 +98,16 @@ const AuthenticatedContentContentIdRoute =
     path: '/content/$contentId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedContentRoute = AuthenticatedContentRouteImport.update({
+  id: '/content/',
+  path: '/content/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedProjectsProjectIdPhotosRoute =
   AuthenticatedProjectsProjectIdPhotosRouteImport.update({
     id: '/photos',
@@ -101,9 +134,14 @@ export interface FileRoutesByFullPath {
   '/library': typeof AuthenticatedLibraryRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/content/': typeof AuthenticatedContentRoute
+  '/projects/': typeof AuthenticatedProjectsRoute
   '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
+  '/projects/generate': typeof AuthenticatedProjectsGenerateRoute
+  '/projects/interview': typeof AuthenticatedProjectsInterviewRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/projects/photos': typeof AuthenticatedProjectsPhotosRoute
   '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
@@ -115,9 +153,14 @@ export interface FileRoutesByTo {
   '/library': typeof AuthenticatedLibraryRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/content': typeof AuthenticatedContentRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
+  '/projects/generate': typeof AuthenticatedProjectsGenerateRoute
+  '/projects/interview': typeof AuthenticatedProjectsInterviewRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/projects/photos': typeof AuthenticatedProjectsPhotosRoute
   '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
@@ -131,9 +174,14 @@ export interface FileRoutesById {
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/content/': typeof AuthenticatedContentRoute
+  '/_authenticated/projects/': typeof AuthenticatedProjectsRoute
   '/_authenticated/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
+  '/_authenticated/projects/generate': typeof AuthenticatedProjectsGenerateRoute
+  '/_authenticated/projects/interview': typeof AuthenticatedProjectsInterviewRoute
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/_authenticated/projects/photos': typeof AuthenticatedProjectsPhotosRoute
   '/_authenticated/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/_authenticated/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/_authenticated/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
@@ -147,9 +195,14 @@ export interface FileRouteTypes {
     | '/library'
     | '/onboarding'
     | '/settings'
+    | '/content/'
+    | '/projects/'
     | '/content/$contentId'
     | '/projects/$projectId'
+    | '/projects/generate'
+    | '/projects/interview'
     | '/projects/new'
+    | '/projects/photos'
     | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
@@ -161,9 +214,14 @@ export interface FileRouteTypes {
     | '/library'
     | '/onboarding'
     | '/settings'
+    | '/content'
+    | '/projects'
     | '/content/$contentId'
     | '/projects/$projectId'
+    | '/projects/generate'
+    | '/projects/interview'
     | '/projects/new'
+    | '/projects/photos'
     | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
@@ -176,9 +234,14 @@ export interface FileRouteTypes {
     | '/_authenticated/library'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
+    | '/_authenticated/content/'
+    | '/_authenticated/projects/'
     | '/_authenticated/content/$contentId'
     | '/_authenticated/projects/$projectId'
+    | '/_authenticated/projects/generate'
+    | '/_authenticated/projects/interview'
     | '/_authenticated/projects/new'
+    | '/_authenticated/projects/photos'
     | '/_authenticated/projects/$projectId/generate'
     | '/_authenticated/projects/$projectId/interview'
     | '/_authenticated/projects/$projectId/photos'
@@ -241,11 +304,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/photos': {
+      id: '/_authenticated/projects/photos'
+      path: '/projects/photos'
+      fullPath: '/projects/photos'
+      preLoaderRoute: typeof AuthenticatedProjectsPhotosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/projects/new': {
       id: '/_authenticated/projects/new'
       path: '/projects/new'
       fullPath: '/projects/new'
       preLoaderRoute: typeof AuthenticatedProjectsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/interview': {
+      id: '/_authenticated/projects/interview'
+      path: '/projects/interview'
+      fullPath: '/projects/interview'
+      preLoaderRoute: typeof AuthenticatedProjectsInterviewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/generate': {
+      id: '/_authenticated/projects/generate'
+      path: '/projects/generate'
+      fullPath: '/projects/generate'
+      preLoaderRoute: typeof AuthenticatedProjectsGenerateRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/$projectId': {
@@ -260,6 +344,20 @@ declare module '@tanstack/react-router' {
       path: '/content/$contentId'
       fullPath: '/content/$contentId'
       preLoaderRoute: typeof AuthenticatedContentContentIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/': {
+      id: '/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/content/': {
+      id: '/_authenticated/content/'
+      path: '/content'
+      fullPath: '/content/'
+      preLoaderRoute: typeof AuthenticatedContentRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/$projectId/photos': {
@@ -312,9 +410,14 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedContentRoute: typeof AuthenticatedContentRoute
+  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedContentContentIdRoute: typeof AuthenticatedContentContentIdRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRouteWithChildren
+  AuthenticatedProjectsGenerateRoute: typeof AuthenticatedProjectsGenerateRoute
+  AuthenticatedProjectsInterviewRoute: typeof AuthenticatedProjectsInterviewRoute
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
+  AuthenticatedProjectsPhotosRoute: typeof AuthenticatedProjectsPhotosRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -322,10 +425,15 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedContentRoute: AuthenticatedContentRoute,
+  AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedContentContentIdRoute: AuthenticatedContentContentIdRoute,
   AuthenticatedProjectsProjectIdRoute:
     AuthenticatedProjectsProjectIdRouteWithChildren,
+  AuthenticatedProjectsGenerateRoute: AuthenticatedProjectsGenerateRoute,
+  AuthenticatedProjectsInterviewRoute: AuthenticatedProjectsInterviewRoute,
   AuthenticatedProjectsNewRoute: AuthenticatedProjectsNewRoute,
+  AuthenticatedProjectsPhotosRoute: AuthenticatedProjectsPhotosRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
@@ -340,3 +448,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

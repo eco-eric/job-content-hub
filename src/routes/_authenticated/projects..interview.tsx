@@ -7,7 +7,7 @@ import { VoiceField } from "@/components/VoiceField";
 import { questionsFor, ARRAY_COLUMNS } from "@/lib/interview";
 import { Check } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/projects/$projectId/interview")({
+export const Route = createFileRoute("/_authenticated/projects/interview")({
   component: Interview,
 });
 
