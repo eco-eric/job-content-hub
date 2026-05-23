@@ -4,7 +4,7 @@
 // For every required Layer-1 project column that is empty (null / "" / []),
 // the body contains a [confirm: <column>] token AND `flagged_unknowns`
 // includes the same key. Swap the body of buildDraft() for an LLM later —
-// keep the no-invented-facts contract intact.
+// keep this contract intact.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -31,9 +31,9 @@ function isEmpty(v: unknown): boolean {
 
 function fact(project: Record<string, unknown>, key: string, confirms: Confirm[]): string {
   const v = project[key];
-  if (!isEmpty(v)) return Array.isArray(v) ? (v as unknown[]).join(", ") : String(v);
+  if (!isEmpty(v)) return Array.isArray(v) ? (v as unknown[]).join(", ") : String(v).trim();
   const prompt = REQUIRED_FACTS[key] ?? `Provide ${key.replace(/_/g, " ")}`;
-  if (!confirms.find(c => c.key === key)) confirms.push({ key, prompt });
+  if (!confirms.find((c) => c.key === key)) confirms.push({ key, prompt });
   return `[confirm: ${key}]`;
 }
 
@@ -46,6 +46,8 @@ function opt(project: Record<string, unknown>, key: string): string {
 function buildDraft(args: {
   intent: string;
   channel: string;
+  length?: "short" | "medium" | "long";
+  tone?: "more_technical" | "more_homeowner" | null;
   project: Record<string, unknown>;
   company: Record<string, unknown>;
 }) {
@@ -53,12 +55,20 @@ function buildDraft(args: {
 
   const rawCompanyName = typeof args.company.name === "string" ? (args.company.name as string).trim() : "";
   let company = rawCompanyName;
-  if (!company) { confirms.push({ key: "company_name", prompt: "Company name" }); company = "[confirm: company_name]"; }
+  if (!company) {
+    confirms.push({ key: "company_name", prompt: "Company name" });
+    company = "[confirm: company_name]";
+  }
 
-  const ctas = Array.isArray(args.company.standard_ctas) ? args.company.standard_ctas as Array<{ label?: string }> : [];
+  const ctas = Array.isArray(args.company.standard_ctas)
+    ? (args.company.standard_ctas as Array<{ label?: string; destination?: string }>)
+    : [];
   const rawCta = ctas[0]?.label?.trim() || "";
   let cta = rawCta;
-  if (!cta) { confirms.push({ key: "cta", prompt: "Standard call to action" }); cta = "[confirm: cta]"; }
+  if (!cta) {
+    confirms.push({ key: "cta", prompt: "Standard call to action" });
+    cta = "[confirm: cta]";
+  }
 
   const area = Array.isArray(args.company.service_area) ? (args.company.service_area as string[]).join(", ") : "";
 
@@ -67,12 +77,15 @@ function buildDraft(args: {
   const fix = fact(args.project, "scope_performed", confirms);
   const ctype = fact(args.project, "customer_type", confirms);
   const neighborhood = opt(args.project, "location_neighborhood");
+  const city = opt(args.project, "location_city");
   const equipment = opt(args.project, "equipment_used");
   const outcome = opt(args.project, "outcome");
   const unusual = opt(args.project, "unusual_details");
   const lesson = opt(args.project, "lesson_learned");
+  const quote = opt(args.project, "customer_quote");
 
-  const local = neighborhood ? ` in ${neighborhood}` : area ? ` in ${area}` : "";
+  const local = neighborhood ? ` in ${neighborhood}` : city ? ` in ${city}` : area ? ` in ${area}` : "";
+
   const angles: Record<string, string> = {
     educational: `What this ${service} job can teach you`,
     seo: `${service}${local}: a real case`,
@@ -82,11 +95,14 @@ function buildDraft(args: {
   const headline = angles[args.intent] || `${service}${local}`;
 
   const equipLine = equipment ? `Equipment involved: ${equipment}.` : "";
-  const outcomeLine = outcome ? `Outcome: ${outcome}` : "";
-  const unusualLine = unusual ? `What made this one stand out: ${unusual}` : "";
+  const outcomeLine = outcome ? `Outcome: ${outcome}.` : "";
+  const unusualLine = unusual ? `What stood out: ${unusual}` : "";
   const lessonLine = lesson ? `Lesson for other techs: ${lesson}` : "";
+  const quoteLine = quote ? `> "${quote}"` : "";
+  const toneTag = args.tone === "more_technical" ? " (technical voice)" : args.tone === "more_homeowner" ? " (homeowner-friendly voice)" : "";
+  const lengthHint = args.length ?? "medium";
 
-  const blog = `# ${headline}
+  const blog = `# ${headline}${toneTag}
 
 We got called out for a ${service}${local}. The customer's complaint: ${symptom}.
 
@@ -98,6 +114,8 @@ ${unusualLine}
 
 ${outcomeLine}
 
+${quoteLine}
+
 ${lessonLine}
 
 If you're dealing with something similar, ${cta}. — ${company}`;
@@ -108,12 +126,14 @@ Called out for a ${service}${local}. Complaint: ${symptom}. Here's what we did: 
 
 ${cta} — ${company}`;
 
+  const tagify = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, "");
+  const hashtags = ["HVAC", tagify(service), neighborhood ? tagify(neighborhood) : ""].filter(Boolean);
   const ig = `${headline}
 
 ${symptom} → ${fix}.
 ${outcome ? outcome + " " : ""}${cta}
 
-#HVAC #${service.replace(/\s+/g, "")}${neighborhood ? ` #${neighborhood.replace(/\s+/g, "")}` : ""}`;
+${hashtags.map((h) => `#${h}`).join(" ")}`;
 
   const caseStudy = `# ${headline}
 
@@ -125,20 +145,26 @@ ${outcome ? outcome + " " : ""}${cta}
 
 **Result.** ${outcome || "[confirm: outcome]"}
 
+${quoteLine}
+
 ${unusualLine}
 
 ${cta} — ${company}`;
 
-  const bodies: Record<string, string> = { seo_blog: blog, facebook: fb, instagram: ig, case_study: caseStudy };
-  const body = (bodies[args.channel] || blog).trim();
+  const bodies: Record<string, string> = { blog, facebook: fb, instagram: ig, case_study: caseStudy };
+  let body = (bodies[args.channel] || blog).trim();
 
-  if (!outcome && args.channel === "case_study" && !confirms.find(c => c.key === "outcome")) {
+  // Length variant: crude shorten/extend on the stub.
+  if (lengthHint === "short" && body.length > 400) body = body.slice(0, 400) + "…";
+  if (lengthHint === "long" && args.channel !== "instagram") body = body + `\n\nP.S. Want this kind of work done right? ${cta}.`;
+
+  if (!outcome && args.channel === "case_study" && !confirms.find((c) => c.key === "outcome")) {
     confirms.push({ key: "outcome", prompt: "How did the job end?" });
   }
 
   const seen = new Set<string>();
-  const flagged_unknowns = confirms.filter(c => seen.has(c.key) ? false : (seen.add(c.key), true));
-  return { headline, body, flagged_unknowns };
+  const flagged_unknowns = confirms.filter((c) => (seen.has(c.key) ? false : (seen.add(c.key), true)));
+  return { headline, body, hashtags: args.channel === "instagram" ? hashtags : [], flagged_unknowns };
 }
 
 Deno.serve(async (req) => {
@@ -150,7 +176,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: auth } } },
     );
-    const { projectId, intent, channel } = await req.json();
+    const { projectId, intent, channel, length, tone } = await req.json();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "content-type": "application/json" } });
@@ -163,6 +189,8 @@ Deno.serve(async (req) => {
     const result = buildDraft({
       intent,
       channel,
+      length,
+      tone,
       project: project as Record<string, unknown>,
       company: (company ?? {}) as Record<string, unknown>,
     });
