@@ -9,6 +9,14 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+type ProjectRow = {
+  id: string;
+  name: string;
+  status: string;
+  service_type_detail: string | null;
+  updated_at: string;
+};
+
 function Dashboard() {
   const { user } = useAuth();
   const projectsQ = useQuery({
@@ -16,16 +24,18 @@ function Dashboard() {
     queryKey: ["projects", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("projects").select("*").order("updated_at", { ascending: false });
+        .from("projects")
+        .select("id,name,status,service_type_detail,updated_at")
+        .order("updated_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as ProjectRow[];
     },
   });
 
   const projects = projectsQ.data ?? [];
-  const inProgress = projects.filter((p) => p.status === "triaging" || p.status === "interviewing");
-  const ready = projects.filter((p) => p.status === "ready");
-  const archived = projects.filter((p) => p.status === "archived");
+  const inProgress = projects.filter(p => p.status === "draft" || p.status === "in_progress");
+  const ready = projects.filter(p => p.status === "ready");
+  const archived = projects.filter(p => p.status === "archived");
 
   return (
     <div>
@@ -58,7 +68,7 @@ function Dashboard() {
   );
 }
 
-function Section({ title, items }: { title: string; items: Array<{ id: string; title: string; status: string; service_line: string | null; updated_at: string }> }) {
+function Section({ title, items }: { title: string; items: ProjectRow[] }) {
   return (
     <section>
       <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">{title}</h2>
@@ -67,10 +77,10 @@ function Section({ title, items }: { title: string; items: Array<{ id: string; t
           <Link key={p.id} to="/projects/$projectId" params={{ projectId: p.id }}>
             <Card className="flex items-center justify-between hover:border-foreground/40 transition-colors">
               <div className="min-w-0">
-                <div className="font-medium truncate">{p.title}</div>
+                <div className="font-medium truncate">{p.name}</div>
                 <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                   <StatusBadge status={p.status} />
-                  {p.service_line && <span>{p.service_line}</span>}
+                  {p.service_type_detail && <span>{p.service_type_detail}</span>}
                   <span>· {new Date(p.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>

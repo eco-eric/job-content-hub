@@ -7,8 +7,14 @@ import { VoiceField } from "@/components/VoiceField";
 import { VOICE_SAMPLES } from "@/lib/constants";
 import { Plus, Trash2 } from "lucide-react";
 
-type ServiceLine = { name: string; description: string; keywords: string[] };
+type ServiceLine = { id: string; name: string; description: string; keywords: string[] };
 type CTA = { label: string; type: string; destination: string };
+type VoiceExample = { label: string; paragraph: string };
+
+const CUSTOMER_TYPE_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "residential", label: "Residential" },
+  { id: "light_commercial", label: "Light commercial" },
+];
 
 export function OnboardingForm({
   onSaved,
@@ -22,66 +28,77 @@ export function OnboardingForm({
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  const profileQ = useQuery({
+  const companyQ = useQuery({
     enabled: !!user,
-    queryKey: ["company_profile", user?.id],
-    queryFn: async () => (await supabase.from("company_profile").select("*").eq("user_id", user!.id).maybeSingle()).data,
+    queryKey: ["company", user?.id],
+    queryFn: async () => (await supabase.from("companies").select("*").eq("owner_user_id", user!.id).maybeSingle()).data,
   });
 
-  const [companyName, setCompanyName] = useState("");
+  const [name, setName] = useState("");
   const [serviceArea, setServiceArea] = useState("");
-  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([
-    { name: "", description: "", keywords: [] },
-  ]);
+  const [customerTypes, setCustomerTypes] = useState<string[]>(["residential"]);
+  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ id: "sl_1", name: "", description: "", keywords: [] }]);
   const [differentiators, setDifferentiators] = useState<string[]>([""]);
   const [ctas, setCtas] = useState<CTA[]>([{ label: "", type: "phone", destination: "" }]);
-  const [voiceSampleId, setVoiceSampleId] = useState<string>(VOICE_SAMPLES[0].id);
-  const [voiceSample, setVoiceSample] = useState<string>(VOICE_SAMPLES[0].text);
+  const [voiceLabel, setVoiceLabel] = useState<string>(VOICE_SAMPLES[0].label);
+  const [voiceParagraph, setVoiceParagraph] = useState<string>(VOICE_SAMPLES[0].text);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profileQ.data) return;
-    const p = profileQ.data;
-    setCompanyName(p.company_name || "");
-    setServiceArea(p.service_area || "");
-    const sl = Array.isArray(p.service_lines) ? (p.service_lines as unknown as ServiceLine[]) : [];
+    const c = companyQ.data;
+    if (!c) return;
+    setName(c.name || "");
+    setServiceArea((c.service_area || []).join(", "));
+    if ((c.customer_types || []).length) setCustomerTypes(c.customer_types);
+    const sl = Array.isArray(c.service_lines) ? (c.service_lines as unknown as ServiceLine[]) : [];
     if (sl.length) setServiceLines(sl);
-    if (p.differentiators?.length) setDifferentiators(p.differentiators);
-    const cs = Array.isArray(p.standard_ctas) ? (p.standard_ctas as unknown as CTA[]) : [];
+    if ((c.differentiators || []).length) setDifferentiators(c.differentiators);
+    const cs = Array.isArray(c.standard_ctas) ? (c.standard_ctas as unknown as CTA[]) : [];
     if (cs.length) setCtas(cs);
-    if (p.voice_sample) {
-      setVoiceSample(p.voice_sample);
-      const match = VOICE_SAMPLES.find(v => v.text === p.voice_sample);
-      setVoiceSampleId(match?.id ?? "custom");
+    const ex = Array.isArray(c.voice_examples) ? (c.voice_examples as unknown as VoiceExample[]) : [];
+    if (ex[0]) {
+      setVoiceLabel(ex[0].label);
+      setVoiceParagraph(ex[0].paragraph);
     }
-  }, [profileQ.data]);
+  }, [companyQ.data]);
 
   const pickSample = (id: string) => {
     const s = VOICE_SAMPLES.find(v => v.id === id);
     if (!s) return;
-    setVoiceSampleId(id);
-    setVoiceSample(s.text);
+    setVoiceLabel(s.label);
+    setVoiceParagraph(s.text);
+  };
+
+  const toggleCustomerType = (id: string) => {
+    setCustomerTypes((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const save = async () => {
     if (!user) return;
-    setSaving(true);
-    setError(null);
+    setSaving(true); setError(null);
     const payload = {
-      user_id: user.id,
-      company_name: companyName.trim(),
+      owner_user_id: user.id,
+      name: name.trim(),
       trade: "HVAC",
-      service_area: serviceArea.trim(),
-      service_lines: serviceLines.filter(s => s.name.trim()),
+      service_area: serviceArea.split(",").map(s => s.trim()).filter(Boolean),
+      customer_types: customerTypes,
+      service_lines: serviceLines
+        .filter(s => s.name.trim())
+        .map((s, i) => ({ id: s.id || `sl_${i + 1}`, name: s.name.trim(), description: s.description.trim(), keywords: s.keywords })),
       differentiators: differentiators.map(d => d.trim()).filter(Boolean),
       standard_ctas: ctas.filter(c => c.label.trim()),
-      voice_sample: voiceSample.trim(),
+      voice_examples: voiceParagraph.trim()
+        ? [{ label: voiceLabel || "My voice", paragraph: voiceParagraph.trim() }]
+        : [],
     };
-    const { error } = await supabase.from("company_profile").upsert(payload, { onConflict: "user_id" });
+    const existing = companyQ.data;
+    const { error: err } = existing
+      ? await supabase.from("companies").update(payload).eq("id", existing.id)
+      : await supabase.from("companies").insert(payload);
     setSaving(false);
-    if (error) { setError(error.message); return; }
-    qc.invalidateQueries({ queryKey: ["company_profile"] });
+    if (err) { setError(err.message); return; }
+    qc.invalidateQueries({ queryKey: ["company"] });
     onSaved();
   };
 
@@ -91,18 +108,26 @@ export function OnboardingForm({
         <h2 className="font-medium mb-4">Basics</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Company name">
-            <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Northside HVAC"
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Northside HVAC"
               className="w-full rounded-md border border-input bg-card px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-ring" />
           </Field>
-          <Field label="Service area">
-            <input value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} placeholder="e.g. Greater Boston"
+          <Field label="Service area (comma separated)">
+            <input value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} placeholder="e.g. Boston, Cambridge, Somerville"
               className="w-full rounded-md border border-input bg-card px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-ring" />
           </Field>
+        </div>
+        <div className="mt-4">
+          <label className="block text-sm font-medium mb-2">Customer types</label>
+          <div className="flex flex-wrap gap-2">
+            {CUSTOMER_TYPE_OPTIONS.map(o => (
+              <Chip key={o.id} active={customerTypes.includes(o.id)} onClick={() => toggleCustomerType(o.id)}>{o.label}</Chip>
+            ))}
+          </div>
         </div>
       </Card>
 
       <Card>
-        <Header h="Service lines" sub="What kinds of jobs do you take? These become chips in the interview." />
+        <Header h="Service lines" sub="What kinds of jobs do you take? These become chips when starting a project." />
         <div className="space-y-3">
           {serviceLines.map((sl, i) => (
             <div key={i} className="rounded-md border border-border p-3 space-y-2 bg-background">
@@ -119,7 +144,7 @@ export function OnboardingForm({
                 placeholder="SEO keywords, comma separated" className="w-full rounded-md border border-input bg-card px-3 py-3 text-base" />
             </div>
           ))}
-          <button onClick={() => setServiceLines([...serviceLines, { name: "", description: "", keywords: [] }])}
+          <button onClick={() => setServiceLines([...serviceLines, { id: `sl_${serviceLines.length + 1}`, name: "", description: "", keywords: [] }])}
             className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
             <Plus className="h-4 w-4" /> Add service line
           </button>
@@ -146,7 +171,7 @@ export function OnboardingForm({
       </Card>
 
       <Card>
-        <Header h="Standard calls to action" sub="What do you want readers to do? We'll put the right one at the bottom of generated posts." />
+        <Header h="Standard calls to action" sub="What do you want readers to do? The first one gets used at the bottom of generated posts." />
         <div className="space-y-3">
           {ctas.map((c, i) => (
             <div key={i} className="grid gap-2 md:grid-cols-[1fr_140px_1fr_44px] items-start">
@@ -172,20 +197,20 @@ export function OnboardingForm({
       </Card>
 
       <Card>
-        <Header h="Voice sample" sub="Pick the example that sounds most like how you'd actually talk about a job, then edit it until it sounds like you. Generated content will mirror this voice." />
+        <Header h="Voice example" sub="Pick the example that sounds most like how you'd actually talk about a job, then edit it until it sounds like you. Generated content will mirror this paragraph's rhythm, vocabulary, and length." />
         <div className="flex flex-wrap gap-2 mb-4">
           {VOICE_SAMPLES.map((s) => (
-            <Chip key={s.id} active={voiceSampleId === s.id} onClick={() => pickSample(s.id)}>{s.label}</Chip>
+            <Chip key={s.id} active={voiceLabel === s.label} onClick={() => pickSample(s.id)}>{s.label}</Chip>
           ))}
-          <Chip active={voiceSampleId === "custom"} onClick={() => setVoiceSampleId("custom")}>Custom</Chip>
         </div>
-        <VoiceField multiline rows={7} value={voiceSample} onChange={(v) => { setVoiceSample(v); setVoiceSampleId("custom"); }}
-          hint="Edit freely. This paragraph IS your voice — the generator will match its rhythm, vocabulary, and length." />
+        <VoiceField multiline rows={7} value={voiceParagraph}
+          onChange={(v) => { setVoiceParagraph(v); }}
+          hint="Edit freely. This paragraph IS your voice sample — we pass it to the generator verbatim." />
       </Card>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-3">
-        <PrimaryButton onClick={save} disabled={saving || !companyName.trim() || !voiceSample.trim()}>
+        <PrimaryButton onClick={save} disabled={saving || !name.trim() || !voiceParagraph.trim()}>
           {saving ? "Saving…" : ctaLabel}
         </PrimaryButton>
         {secondary}

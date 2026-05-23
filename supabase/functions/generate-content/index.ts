@@ -1,11 +1,10 @@
-// Generation seam.
+// Generation seam — DETERMINISTIC STUB.
 //
 // CRITICAL CONTRACT — NEVER INVENT FACTS.
-// If a fact (brand, model, refrigerant, price, warranty, name, etc.) is not
-// present in answers or company_profile, the output MUST surface a
-// `[confirm: <key>]` token AND include the key in `unresolved_confirms`.
-// Today this returns a deterministic mock. Swap the body of buildDraft()
-// for an LLM call later — keep the no-invented-facts contract intact.
+// For every required Layer-1 project column that is empty (null / "" / []),
+// the body contains a [confirm: <column>] token AND `flagged_unknowns`
+// includes the same key. Swap the body of buildDraft() for an LLM later —
+// keep the no-invented-facts contract intact.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -14,73 +13,86 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type Intent = "educational" | "seo" | "social_proof" | "process";
-type Channel = "seo_blog" | "facebook" | "instagram" | "case_study";
 type Confirm = { key: string; prompt: string };
 
 const REQUIRED_FACTS: Record<string, string> = {
-  service_line: "Which type of job was this?",
+  service_type_detail: "Which type of job was this?",
   customer_type: "Residential or commercial?",
-  symptom: "What was the customer's complaint?",
-  root_cause: "What did you actually find?",
-  fix: "What did you do to fix it?",
+  before_state: "What was the customer's complaint?",
+  scope_performed: "What did you do to fix it?",
 };
 
-function fact(answers: Record<string, string>, key: string, confirms: Confirm[]): string {
-  const v = answers[key];
-  if (v && v.trim()) return v.trim();
+function isEmpty(v: unknown): boolean {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "string") return v.trim().length === 0;
+  return false;
+}
+
+function fact(project: Record<string, unknown>, key: string, confirms: Confirm[]): string {
+  const v = project[key];
+  if (!isEmpty(v)) return Array.isArray(v) ? (v as unknown[]).join(", ") : String(v);
   const prompt = REQUIRED_FACTS[key] ?? `Provide ${key.replace(/_/g, " ")}`;
   if (!confirms.find(c => c.key === key)) confirms.push({ key, prompt });
   return `[confirm: ${key}]`;
 }
 
+function opt(project: Record<string, unknown>, key: string): string {
+  const v = project[key];
+  if (isEmpty(v)) return "";
+  return Array.isArray(v) ? (v as unknown[]).join(", ") : String(v).trim();
+}
+
 function buildDraft(args: {
-  intent: Intent;
-  channel: Channel;
-  answers: Record<string, string>;
-  profile: { company_name?: string; service_area?: string; voice_sample?: string; standard_ctas?: Array<{ label: string }> };
-}): { title: string; body_md: string; unresolved_confirms: Confirm[] } {
+  intent: string;
+  channel: string;
+  project: Record<string, unknown>;
+  company: Record<string, unknown>;
+}) {
   const confirms: Confirm[] = [];
-  const company = args.profile.company_name?.trim() || "[confirm: company_name]";
-  if (!args.profile.company_name) confirms.push({ key: "company_name", prompt: "Company name" });
-  const area = args.profile.service_area?.trim() || "";
-  const cta = args.profile.standard_ctas?.[0]?.label?.trim() || "[confirm: cta]";
-  if (!args.profile.standard_ctas?.[0]?.label) confirms.push({ key: "cta", prompt: "Standard call to action" });
 
-  const service = fact(args.answers, "service_line", confirms);
-  const symptom = fact(args.answers, "symptom", confirms);
-  const root = fact(args.answers, "root_cause", confirms);
-  const fix = fact(args.answers, "fix", confirms);
-  const equipment = args.answers.equipment?.trim();
-  const neighborhood = args.answers.neighborhood?.trim();
-  const outcome = args.answers.outcome?.trim();
-  const unusual = args.answers.branch_what_made_it_unusual?.trim();
-  const lesson = args.answers.branch_lesson?.trim();
+  const rawCompanyName = typeof args.company.name === "string" ? (args.company.name as string).trim() : "";
+  let company = rawCompanyName;
+  if (!company) { confirms.push({ key: "company_name", prompt: "Company name" }); company = "[confirm: company_name]"; }
 
-  const angle: Record<Intent, string> = {
-    educational: `What this ${service} job can teach you`,
-    seo:         `${service}${neighborhood ? ` in ${neighborhood}` : area ? ` in ${area}` : ""}: a real case`,
-    social_proof:`How ${company} handled a tricky ${service}`,
-    process:     `Inside a ${service}: step by step`,
-  };
-  const title = angle[args.intent];
+  const ctas = Array.isArray(args.company.standard_ctas) ? args.company.standard_ctas as Array<{ label?: string }> : [];
+  const rawCta = ctas[0]?.label?.trim() || "";
+  let cta = rawCta;
+  if (!cta) { confirms.push({ key: "cta", prompt: "Standard call to action" }); cta = "[confirm: cta]"; }
+
+  const area = Array.isArray(args.company.service_area) ? (args.company.service_area as string[]).join(", ") : "";
+
+  const service = fact(args.project, "service_type_detail", confirms);
+  const symptom = fact(args.project, "before_state", confirms);
+  const fix = fact(args.project, "scope_performed", confirms);
+  const ctype = fact(args.project, "customer_type", confirms);
+  const neighborhood = opt(args.project, "location_neighborhood");
+  const equipment = opt(args.project, "equipment_used");
+  const outcome = opt(args.project, "outcome");
+  const unusual = opt(args.project, "unusual_details");
+  const lesson = opt(args.project, "lesson_learned");
 
   const local = neighborhood ? ` in ${neighborhood}` : area ? ` in ${area}` : "";
+  const angles: Record<string, string> = {
+    educational: `What this ${service} job can teach you`,
+    seo: `${service}${local}: a real case`,
+    social_proof: `How ${company} handled a tricky ${service}`,
+    process: `Inside a ${service}: step by step`,
+  };
+  const headline = angles[args.intent] || `${service}${local}`;
+
   const equipLine = equipment ? `Equipment involved: ${equipment}.` : "";
   const outcomeLine = outcome ? `Outcome: ${outcome}` : "";
   const unusualLine = unusual ? `What made this one stand out: ${unusual}` : "";
   const lessonLine = lesson ? `Lesson for other techs: ${lesson}` : "";
 
-  const blog = `# ${title}
+  const blog = `# ${headline}
 
 We got called out for a ${service}${local}. The customer's complaint: ${symptom}.
 
-## What we found
-${root}
-${equipLine}
-
-## How we fixed it
+## What we did
 ${fix}
+${equipLine}
 
 ${unusualLine}
 
@@ -90,28 +102,26 @@ ${lessonLine}
 
 If you're dealing with something similar, ${cta}. — ${company}`;
 
-  const fb = `${title}
+  const fb = `${headline}
 
-Called out for a ${service}${local}. Complaint: ${symptom}. Turned out to be ${root}. Here's what we did: ${fix}. ${outcomeLine}
+Called out for a ${service}${local}. Complaint: ${symptom}. Here's what we did: ${fix}. ${outcomeLine}
 
 ${cta} — ${company}`;
 
-  const ig = `${title}
+  const ig = `${headline}
 
-${symptom} → ${root} → ${fix}.
+${symptom} → ${fix}.
 ${outcome ? outcome + " " : ""}${cta}
 
 #HVAC #${service.replace(/\s+/g, "")}${neighborhood ? ` #${neighborhood.replace(/\s+/g, "")}` : ""}`;
 
-  const caseStudy = `# ${title}
+  const caseStudy = `# ${headline}
 
-**Customer:** ${args.answers.customer_type ? fact(args.answers, "customer_type", confirms) : "[confirm: customer_type]"}${local}
+**Customer:** ${ctype}${local}
 
 **Problem.** ${symptom}
 
-**Diagnosis.** ${root}${equipment ? ` ${equipLine}` : ""}
-
-**Approach.** ${fix}
+**Approach.** ${fix}${equipment ? ` ${equipLine}` : ""}
 
 **Result.** ${outcome || "[confirm: outcome]"}
 
@@ -119,13 +129,16 @@ ${unusualLine}
 
 ${cta} — ${company}`;
 
-  const body = ({ seo_blog: blog, facebook: fb, instagram: ig, case_study: caseStudy } as Record<Channel, string>)[args.channel];
+  const bodies: Record<string, string> = { seo_blog: blog, facebook: fb, instagram: ig, case_study: caseStudy };
+  const body = (bodies[args.channel] || blog).trim();
 
-  // Dedupe confirms
+  if (!outcome && args.channel === "case_study" && !confirms.find(c => c.key === "outcome")) {
+    confirms.push({ key: "outcome", prompt: "How did the job end?" });
+  }
+
   const seen = new Set<string>();
-  const unresolved_confirms = confirms.filter(c => (seen.has(c.key) ? false : (seen.add(c.key), true)));
-
-  return { title, body_md: body.trim(), unresolved_confirms };
+  const flagged_unknowns = confirms.filter(c => seen.has(c.key) ? false : (seen.add(c.key), true));
+  return { headline, body, flagged_unknowns };
 }
 
 Deno.serve(async (req) => {
@@ -142,20 +155,17 @@ Deno.serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "content-type": "application/json" } });
 
-    const [{ data: project }, { data: answersRows }, { data: profile }] = await Promise.all([
-      supabase.from("projects").select("*").eq("id", projectId).single(),
-      supabase.from("project_answers").select("*").eq("project_id", projectId),
-      supabase.from("company_profile").select("*").eq("user_id", user.id).maybeSingle(),
-    ]);
+    const { data: project } = await supabase.from("projects").select("*").eq("id", projectId).single();
     if (!project) return new Response(JSON.stringify({ error: "Project not found" }), { status: 404, headers: { ...cors, "content-type": "application/json" } });
 
-    const answers: Record<string, string> = {};
-    for (const a of answersRows ?? []) {
-      const v = (a as { value: unknown }).value;
-      answers[(a as { question_key: string }).question_key] = typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
-    }
+    const { data: company } = await supabase.from("companies").select("*").eq("id", (project as { company_id: string }).company_id).maybeSingle();
 
-    const result = buildDraft({ intent, channel, answers, profile: profile ?? {} });
+    const result = buildDraft({
+      intent,
+      channel,
+      project: project as Record<string, unknown>,
+      company: (company ?? {}) as Record<string, unknown>,
+    });
     return new Response(JSON.stringify(result), { headers: { ...cors, "content-type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...cors, "content-type": "application/json" } });
