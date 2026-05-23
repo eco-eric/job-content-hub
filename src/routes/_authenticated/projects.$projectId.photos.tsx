@@ -19,8 +19,8 @@ function Photos() {
   const [busy, setBusy] = useState(false);
 
   const photosQ = useQuery({
-    queryKey: ["photos", projectId],
-    queryFn: async () => (await supabase.from("project_photos").select("*").eq("project_id", projectId).order("created_at")).data ?? [],
+    queryKey: ["media", projectId],
+    queryFn: async () => (await supabase.from("media").select("*").eq("project_id", projectId).order("created_at")).data ?? [],
   });
 
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -28,7 +28,7 @@ function Photos() {
     (async () => {
       const next: Record<string, string> = {};
       for (const p of photosQ.data ?? []) {
-        const { data } = await supabase.storage.from("project-photos").createSignedUrl(p.storage_path, 3600);
+        const { data } = await supabase.storage.from("project-photos").createSignedUrl(p.url, 3600);
         if (data?.signedUrl) next[p.id] = data.signedUrl;
       }
       setUrls(next);
@@ -42,8 +42,8 @@ function Photos() {
     const path = `${user.id}/${projectId}/${Date.now()}-${file.name}`;
     const up = await supabase.storage.from("project-photos").upload(path, file);
     if (!up.error) {
-      await supabase.from("project_photos").insert({ project_id: projectId, user_id: user.id, storage_path: path, tag });
-      qc.invalidateQueries({ queryKey: ["photos", projectId] });
+      await supabase.from("media").insert({ project_id: projectId, url: path, type: "image", tag });
+      qc.invalidateQueries({ queryKey: ["media", projectId] });
     }
     setBusy(false);
     e.target.value = "";
@@ -51,8 +51,8 @@ function Photos() {
 
   const remove = async (id: string, path: string) => {
     await supabase.storage.from("project-photos").remove([path]);
-    await supabase.from("project_photos").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["photos", projectId] });
+    await supabase.from("media").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["media", projectId] });
   };
 
   return (
@@ -74,7 +74,7 @@ function Photos() {
             {urls[p.id] && <img src={urls[p.id]} alt={p.tag} className="w-full h-48 object-cover" />}
             <div className="p-3 flex items-center justify-between">
               <span className="text-xs uppercase tracking-wider text-muted-foreground">{p.tag}</span>
-              <button onClick={() => remove(p.id, p.storage_path)} className="text-muted-foreground hover:text-destructive">
+              <button onClick={() => remove(p.id, p.url)} className="text-muted-foreground hover:text-destructive">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

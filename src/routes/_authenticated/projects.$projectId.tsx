@@ -2,13 +2,19 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, PrimaryButton, SecondaryButton, StatusBadge } from "@/components/AppShell";
-import { questionsFor } from "@/lib/interview";
+import { questionsFor, ARRAY_COLUMNS } from "@/lib/interview";
 import { WORTHINESS_TAGS, CHANNELS, INTENTS } from "@/lib/constants";
 import { Image as ImageIcon, MessageSquare, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   component: ProjectHub,
 });
+
+function isFilled(value: unknown, isArray: boolean) {
+  if (value == null) return false;
+  if (isArray) return Array.isArray(value) && value.length > 0;
+  return typeof value === "string" ? value.trim().length > 0 : !!value;
+}
 
 function ProjectHub() {
   const { projectId } = Route.useParams();
@@ -18,17 +24,17 @@ function ProjectHub() {
     queryKey: ["project", projectId],
     queryFn: async () => (await supabase.from("projects").select("*").eq("id", projectId).single()).data,
   });
-  const answersQ = useQuery({
-    queryKey: ["answers", projectId],
-    queryFn: async () => (await supabase.from("project_answers").select("*").eq("project_id", projectId)).data ?? [],
-  });
   const photosQ = useQuery({
-    queryKey: ["photos", projectId],
-    queryFn: async () => (await supabase.from("project_photos").select("*").eq("project_id", projectId)).data ?? [],
+    queryKey: ["media", projectId],
+    queryFn: async () => (await supabase.from("media").select("id").eq("project_id", projectId)).data ?? [],
   });
   const contentQ = useQuery({
     queryKey: ["project-content", projectId],
-    queryFn: async () => (await supabase.from("content_items").select("*").eq("project_id", projectId).order("updated_at", { ascending: false })).data ?? [],
+    queryFn: async () => (await supabase
+      .from("content_assets")
+      .select("id,headline,channel,status,updated_at,intent_id,content_intents(intent_type)")
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false })).data ?? [],
   });
 
   const project = projectQ.data;
@@ -36,21 +42,22 @@ function ProjectHub() {
   if (!project) return <p className="text-sm text-muted-foreground">Project not found.</p>;
 
   const questions = questionsFor(project.worthiness_tag);
-  const answered = (answersQ.data ?? []).filter(a => a.value !== null).length;
-  const requiredKeys = questions.filter(q => q.required).map(q => q.key);
-  const requiredDone = requiredKeys.every(k => (answersQ.data ?? []).some(a => a.question_key === k && a.value));
+  const answered = questions.filter(q => isFilled((project as Record<string, unknown>)[q.key], ARRAY_COLUMNS.has(q.key))).length;
+  const requiredDone = questions
+    .filter(q => q.required)
+    .every(q => isFilled((project as Record<string, unknown>)[q.key], ARRAY_COLUMNS.has(q.key)));
   const tagLabel = WORTHINESS_TAGS.find(t => t.id === project.worthiness_tag)?.label;
 
   const markReady = async () => {
-    await supabase.from("projects").update({ status: "ready" }).eq("id", projectId);
+    await supabase.from("projects").update({ status: "ready", completed_at: new Date().toISOString() }).eq("id", projectId);
     projectQ.refetch();
   };
 
   return (
     <div>
       <PageHeader
-        title={project.title}
-        subtitle={[tagLabel, project.service_line].filter(Boolean).join(" · ") || undefined}
+        title={project.name}
+        subtitle={[tagLabel, project.service_type_detail].filter(Boolean).join(" · ") || undefined}
         right={<StatusBadge status={project.status} />}
       />
 
@@ -107,21 +114,24 @@ function ProjectHub() {
         <section className="mt-10">
           <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Generated content</h2>
           <div className="grid gap-3">
-            {(contentQ.data ?? []).map((c) => (
-              <Link key={c.id} to="/content/$contentId" params={{ contentId: c.id }}>
-                <Card className="hover:border-foreground/40 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{c.title ?? CHANNELS.find(ch => ch.id === c.channel)?.label}</div>
-                    <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2 items-center">
-                      <StatusBadge status={c.status} />
-                      <span>{INTENTS.find(i => i.id === c.intent)?.label}</span>
-                      <span>·</span>
-                      <span>{CHANNELS.find(ch => ch.id === c.channel)?.label}</span>
+            {(contentQ.data ?? []).map((c) => {
+              const intentType = (c as { content_intents?: { intent_type?: string } | null }).content_intents?.intent_type;
+              return (
+                <Link key={c.id} to="/content/$contentId" params={{ contentId: c.id }}>
+                  <Card className="hover:border-foreground/40 flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">{c.headline ?? CHANNELS.find(ch => ch.id === c.channel)?.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2 items-center">
+                        <StatusBadge status={c.status} />
+                        {intentType && <span>{INTENTS.find(i => i.id === intentType)?.label ?? intentType}</span>}
+                        <span>·</span>
+                        <span>{CHANNELS.find(ch => ch.id === c.channel)?.label}</span>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

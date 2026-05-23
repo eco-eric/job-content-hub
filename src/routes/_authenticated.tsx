@@ -17,28 +17,25 @@ function AuthLayout() {
     if (!loading && !user) nav({ to: "/login" });
   }, [loading, user, nav]);
 
-  const profileQ = useQuery({
+  const companyQ = useQuery({
     enabled: !!user,
-    queryKey: ["company_profile", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_profile").select("*").eq("user_id", user!.id).maybeSingle();
-      return data;
-    },
+    queryKey: ["company", user?.id],
+    queryFn: async () => (await supabase.from("companies").select("*").eq("owner_user_id", user!.id).maybeSingle()).data,
   });
 
   useEffect(() => {
-    if (!user || profileQ.isLoading) return;
-    const onboarded = profileQ.data && profileQ.data.company_name && profileQ.data.voice_sample;
+    if (!user || companyQ.isLoading) return;
+    const c = companyQ.data;
+    const examples = Array.isArray(c?.voice_examples) ? c!.voice_examples : [];
+    const onboarded = c && c.name && examples.length > 0;
     const path = typeof window !== "undefined" ? window.location.pathname : "";
     if (!onboarded && path !== "/onboarding" && path !== "/settings") {
       nav({ to: "/onboarding" });
     }
-  }, [user, profileQ.isLoading, profileQ.data, nav]);
+  }, [user, companyQ.isLoading, companyQ.data, nav]);
 
   if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
-    );
+    return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;
   }
 
   return (

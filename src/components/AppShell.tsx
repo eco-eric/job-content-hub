@@ -128,6 +128,7 @@ export function StatusBadge({ status }: { status: string }) {
     exported: "bg-foreground text-background",
     triaging: "bg-muted text-muted-foreground",
     interviewing: "bg-primary/10 text-primary",
+    in_progress: "bg-primary/10 text-primary",
     ready: "bg-primary/10 text-primary",
     archived: "bg-muted text-muted-foreground line-through",
   };

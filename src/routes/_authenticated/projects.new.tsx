@@ -5,9 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card, Chip, PageHeader, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { WORTHINESS_TAGS } from "@/lib/constants";
-import type { Database } from "@/integrations/supabase/types";
+import { ensureCompany } from "@/lib/company";
 
-type Tag = Database["public"]["Enums"]["worthiness_tag"];
+type ServiceLine = { id: string; name: string };
 
 export const Route = createFileRoute("/_authenticated/projects/new")({
   component: NewProject,
@@ -16,32 +16,47 @@ export const Route = createFileRoute("/_authenticated/projects/new")({
 function NewProject() {
   const { user } = useAuth();
   const nav = useNavigate();
-  const [title, setTitle] = useState("");
-  const [serviceLine, setServiceLine] = useState<string>("");
-  const [tag, setTag] = useState<Tag | "nothing_special" | null>(null);
+  const [name, setName] = useState("");
+  const [serviceLineId, setServiceLineId] = useState<string>("");
+  const [tag, setTag] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const profileQ = useQuery({
+  const companyQ = useQuery({
     enabled: !!user,
-    queryKey: ["company_profile", user?.id],
-    queryFn: async () => (await supabase.from("company_profile").select("service_lines").eq("user_id", user!.id).maybeSingle()).data,
+    queryKey: ["company", user?.id],
+    queryFn: async () => (await supabase.from("companies").select("id,service_lines").eq("owner_user_id", user!.id).maybeSingle()).data,
   });
-  const lines = ((profileQ.data?.service_lines as unknown) as Array<{ name: string }> | undefined) ?? [];
+  const lines = (Array.isArray(companyQ.data?.service_lines) ? companyQ.data!.service_lines : []) as unknown as ServiceLine[];
 
   const create = async () => {
-    if (!user || !title.trim() || !tag) return;
-    setBusy(true);
-    const status = tag === "nothing_special" ? "archived" : "interviewing";
-    const worthiness_tag = tag === "nothing_special" ? null : (tag as Tag);
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({ user_id: user.id, title: title.trim(), service_line: serviceLine || null, status, worthiness_tag })
-      .select("id")
-      .single();
-    setBusy(false);
-    if (error || !data) return;
-    if (tag === "nothing_special") nav({ to: "/dashboard" });
-    else nav({ to: "/projects/$projectId/interview", params: { projectId: data.id } });
+    if (!user || !name.trim() || !tag) return;
+    setBusy(true); setErr(null);
+    try {
+      const company = await ensureCompany(user.id);
+      const isNothing = tag === "nothing_special";
+      const status = isNothing ? "archived" : "in_progress";
+      const worthiness_tag = isNothing ? null : tag;
+      const selectedLine = lines.find(l => l.id === serviceLineId);
+      const { data, error } = await supabase
+        .from("projects")
+        .insert({
+          company_id: company.id,
+          name: name.trim(),
+          status,
+          worthiness_tag,
+          service_line_id: serviceLineId || null,
+          service_type_detail: selectedLine?.name ?? null,
+          started_at: isNothing ? null : new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (error || !data) throw error ?? new Error("Insert failed");
+      if (isNothing) nav({ to: "/dashboard" });
+      else nav({ to: "/projects/$projectId/interview", params: { projectId: data.id } });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
   };
 
   return (
@@ -51,7 +66,7 @@ function NewProject() {
       <Card className="space-y-5">
         <div>
           <label className="block text-sm font-medium mb-2">What was the job?</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)}
+          <input value={name} onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Heat pump replacement on Maple St."
             className="w-full rounded-md border border-input bg-card px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
@@ -61,7 +76,7 @@ function NewProject() {
             <label className="block text-sm font-medium mb-2">Service line <span className="text-muted-foreground font-normal">(optional)</span></label>
             <div className="flex flex-wrap gap-2">
               {lines.map((l) => (
-                <Chip key={l.name} active={serviceLine === l.name} onClick={() => setServiceLine(serviceLine === l.name ? "" : l.name)}>
+                <Chip key={l.id} active={serviceLineId === l.id} onClick={() => setServiceLineId(serviceLineId === l.id ? "" : l.id)}>
                   {l.name}
                 </Chip>
               ))}
@@ -75,7 +90,7 @@ function NewProject() {
         <p className="text-sm text-muted-foreground mt-1">Pick the one that fits best. This decides what angle the interview takes.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {WORTHINESS_TAGS.map((t) => (
-            <Chip key={t.id} active={tag === t.id} onClick={() => setTag(t.id as Tag)}>{t.label}</Chip>
+            <Chip key={t.id} active={tag === t.id} onClick={() => setTag(t.id)}>{t.label}</Chip>
           ))}
           <Chip active={tag === "nothing_special"} onClick={() => setTag("nothing_special")}>
             Nothing special — skip
@@ -88,8 +103,10 @@ function NewProject() {
         )}
       </div>
 
+      {err && <p className="text-sm text-destructive mt-4">{err}</p>}
+
       <div className="mt-8 flex gap-3">
-        <PrimaryButton onClick={create} disabled={busy || !title.trim() || !tag}>
+        <PrimaryButton onClick={create} disabled={busy || !name.trim() || !tag}>
           {tag === "nothing_special" ? "Archive and exit" : "Start interview"}
         </PrimaryButton>
         <SecondaryButton onClick={() => nav({ to: "/dashboard" })}>Cancel</SecondaryButton>
