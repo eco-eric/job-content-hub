@@ -1,77 +1,175 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader, Card, PrimaryButton, SecondaryButton, StatusBadge } from "@/components/AppShell";
-import { INTENTS, CHANNELS } from "@/lib/constants";
-import { Copy, Download, AlertCircle } from "lucide-react";
+import { PageHeader, Card, PrimaryButton, SecondaryButton, StatusBadge, Chip } from "@/components/AppShell";
+import { INTENTS, CHANNELS, type ChannelId, type IntentId } from "@/lib/constants";
+import { generateContent, type LengthVariant, type ToneOverride } from "@/lib/generation";
+import { Copy, Download, AlertCircle, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/content/$contentId")({
   component: ContentEditor,
 });
+
+type Confirm = { key: string; prompt: string };
 
 function ContentEditor() {
   const { contentId } = Route.useParams();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["content-asset", contentId],
-    queryFn: async () => (await supabase
-      .from("content_assets")
-      .select("*, content_intents(intent_type)")
-      .eq("id", contentId)
-      .single()).data,
+    queryFn: async () =>
+      (await supabase
+        .from("content_assets")
+        .select("*, content_intents(intent_type)")
+        .eq("id", contentId)
+        .single()).data,
   });
+
   const [body, setBody] = useState("");
   const [headline, setHeadline] = useState("");
+  const [length, setLength] = useState<LengthVariant>("medium");
+  const [tone, setTone] = useState<ToneOverride | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!q.data) return;
     setBody(q.data.body ?? "");
     setHeadline(q.data.headline ?? "");
+    setLength((q.data.length_variant as LengthVariant) ?? "medium");
+    setTone((q.data.tone_overrides as ToneOverride | null) ?? null);
   }, [q.data]);
 
-  if (q.isLoading || !q.data) return <p className="text-sm text-muted-foreground">Loading…</p>;
   const c = q.data;
-  const intentType = (c as { content_intents?: { intent_type?: string } | null }).content_intents?.intent_type ?? "";
-  const intent = INTENTS.find(i => i.id === intentType)?.label ?? intentType;
-  const channel = CHANNELS.find(ch => ch.id === c.channel)?.label ?? c.channel;
-  const confirms = (Array.isArray(c.flagged_unknowns) ? c.flagged_unknowns : []) as Array<{ key: string; prompt: string }>;
-  const remaining = confirms.filter(cf => body.includes(`[confirm: ${cf.key}]`) || body.includes(`[confirm:${cf.key}]`));
+  const intentType = (c as { content_intents?: { intent_type?: string } | null } | undefined)?.content_intents?.intent_type ?? "";
+  const intentLabel = INTENTS.find((i) => i.id === intentType)?.label ?? intentType;
+  const channelLabel = CHANNELS.find((ch) => ch.id === c?.channel)?.label ?? c?.channel ?? "";
+
+  const confirms = useMemo(
+    () => (Array.isArray(c?.flagged_unknowns) ? (c!.flagged_unknowns as Confirm[]) : []),
+    [c?.flagged_unknowns],
+  );
+  // Unresolved = still present in current body text.
+  const remaining = confirms.filter(
+    (cf) => body.includes(`[confirm: ${cf.key}]`) || body.includes(`[confirm:${cf.key}]`),
+  );
+
+  // Click-to-resolve inline chips for [confirm: …] tokens.
+  const resolveInline = async (key: string, replacement: string) => {
+    if (!replacement.trim()) return;
+    const next = body
+      .replaceAll(`[confirm: ${key}]`, replacement.trim())
+      .replaceAll(`[confirm:${key}]`, replacement.trim());
+    setBody(next);
+    const newFlagged = confirms.filter((cf) => cf.key !== key);
+    await supabase.from("content_assets").update({ body: next, flagged_unknowns: newFlagged }).eq("id", contentId);
+    qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
+  };
+
+  const pushVersion = async () => {
+    if (!c) return;
+    const prior = (Array.isArray(c.version_history) ? c.version_history : []) as unknown[];
+    const next = [...prior, { body: c.body, headline: c.headline, at: new Date().toISOString() }].slice(-20);
+    return next;
+  };
 
   const saveDraft = async () => {
-    await supabase.from("content_assets").update({ body, headline }).eq("id", contentId);
+    if (!c) return;
+    setBusy("save");
+    await supabase
+      .from("content_assets")
+      .update({ body, headline, length_variant: length, tone_overrides: tone })
+      .eq("id", contentId);
     qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
+    setBusy(null);
   };
-  const approve = async () => {
-    await supabase.from("content_assets").update({ body, headline, status: "approved" }).eq("id", contentId);
-    qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
+
+  const regenerate = async (overrideLength?: LengthVariant, overrideTone?: ToneOverride | null) => {
+    if (!c) return;
+    setBusy("regen");
+    setError(null);
+    try {
+      const version_history = await pushVersion();
+      const result = await generateContent({
+        projectId: c.project_id,
+        intent: intentType as IntentId,
+        channel: c.channel as ChannelId,
+        length: overrideLength ?? length,
+        tone: overrideTone === undefined ? tone : overrideTone,
+      });
+      await supabase
+        .from("content_assets")
+        .update({
+          body: result.body,
+          headline: result.headline,
+          flagged_unknowns: result.flagged_unknowns,
+          hashtags: result.hashtags ?? [],
+          length_variant: overrideLength ?? length,
+          tone_overrides: overrideTone === undefined ? tone : overrideTone,
+          version_history,
+          generation_metadata: { generated_at: new Date().toISOString(), prompt_version: "v0-stub", model: "stub" },
+        })
+        .eq("id", contentId);
+      qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
   };
-  const copyText = async () => { await navigator.clipboard.writeText(`${headline}\n\n${body}`); };
-  const download = async () => {
-    await supabase.from("content_assets").update({ status: "exported" }).eq("id", contentId);
-    const blob = new Blob([`# ${headline}\n\n${body}`], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${(headline || "content").replace(/\W+/g, "-").toLowerCase()}.md`;
-    a.click(); URL.revokeObjectURL(url);
+
+  const setStatus = async (status: "draft" | "approved" | "exported") => {
+    await supabase.from("content_assets").update({ status }).eq("id", contentId);
     qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
   };
 
+  const copyText = async () => {
+    await navigator.clipboard.writeText(`${headline}\n\n${body}`);
+  };
+  const download = async (ext: "md" | "txt") => {
+    await setStatus("exported");
+    const blob = new Blob([ext === "md" ? `# ${headline}\n\n${body}` : `${headline}\n\n${body}`], {
+      type: ext === "md" ? "text/markdown" : "text/plain",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(headline || "content").replace(/\W+/g, "-").toLowerCase()}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (q.isLoading || !c) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
   return (
-    <div>
-      <PageHeader title={intent + " · " + channel}
+    <div className="pb-32">
+      <PageHeader
+        title={`${intentLabel} · ${channelLabel}`}
         subtitle="Edit freely. Resolve any [confirm: …] markers before approving."
-        right={<div className="flex items-center gap-2"><StatusBadge status={c.status} />
-          <Link to="/projects/$projectId" params={{ projectId: c.project_id }}><SecondaryButton>Project</SecondaryButton></Link></div>} />
+        right={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={c.status} />
+            <Link to="/projects/$projectId" params={{ projectId: c.project_id }}>
+              <SecondaryButton>Project</SecondaryButton>
+            </Link>
+          </div>
+        }
+      />
 
       {remaining.length > 0 && (
         <Card className="mb-4 border-destructive/30 bg-destructive/5">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
-            <div>
+            <div className="flex-1">
               <div className="font-medium">Unresolved facts ({remaining.length})</div>
-              <p className="text-sm text-muted-foreground mt-1">The generator didn't have these — fill them in (or remove the placeholder) before approving.</p>
-              <ul className="mt-2 text-sm list-disc pl-5">
-                {remaining.map(cf => <li key={cf.key}><code className="text-foreground">[confirm: {cf.key}]</code> — {cf.prompt}</li>)}
+              <p className="text-sm text-muted-foreground mt-1">
+                The generator didn't have these. Fill them in inline — clicking saves and removes the marker.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {remaining.map((cf) => (
+                  <InlineConfirm key={cf.key} cf={cf} onResolve={(val) => resolveInline(cf.key, val)} />
+                ))}
               </ul>
             </div>
           </div>
@@ -79,18 +177,86 @@ function ContentEditor() {
       )}
 
       <Card>
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)}
-          className="w-full text-lg font-medium rounded-md border border-input bg-card px-3 py-3 mb-3" placeholder="Headline" />
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={18}
-          className="w-full rounded-md border border-input bg-card px-3 py-3 text-base font-mono leading-relaxed" />
+        <input
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+          className="w-full text-lg font-medium rounded-md border border-input bg-card px-3 py-3 mb-3"
+          placeholder="Headline"
+        />
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={20}
+          className="w-full rounded-md border border-input bg-card px-3 py-3 text-base font-mono leading-relaxed"
+        />
       </Card>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <PrimaryButton onClick={saveDraft}>Save draft</PrimaryButton>
-        <SecondaryButton onClick={approve} disabled={remaining.length > 0}>Approve</SecondaryButton>
-        <SecondaryButton onClick={copyText}><Copy className="h-4 w-4" /> Copy</SecondaryButton>
-        <SecondaryButton onClick={download}><Download className="h-4 w-4" /> Download .md</SecondaryButton>
+      <Card className="mt-4">
+        <div className="space-y-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Length</div>
+            <div className="flex flex-wrap gap-2">
+              {(["short", "medium", "long"] as LengthVariant[]).map((l) => (
+                <Chip key={l} active={length === l} onClick={() => { setLength(l); regenerate(l, undefined); }}>{l}</Chip>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Tone</div>
+            <div className="flex flex-wrap gap-2">
+              <Chip active={tone === null} onClick={() => { setTone(null); regenerate(undefined, null); }}>Default voice</Chip>
+              <Chip active={tone === "more_technical"} onClick={() => { setTone("more_technical"); regenerate(undefined, "more_technical"); }}>More technical</Chip>
+              <Chip active={tone === "more_homeowner"} onClick={() => { setTone("more_homeowner"); regenerate(undefined, "more_homeowner"); }}>More homeowner-friendly</Chip>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {error && <p className="text-sm text-destructive mt-4">{error}</p>}
+
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur md:static md:bg-transparent md:border-0 md:mt-6">
+        <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap gap-2 md:px-0">
+          <PrimaryButton onClick={saveDraft} disabled={busy !== null}>
+            {busy === "save" ? "Saving…" : "Save draft"}
+          </PrimaryButton>
+          <SecondaryButton onClick={() => regenerate()} disabled={busy !== null}>
+            <RefreshCw className={"h-4 w-4" + (busy === "regen" ? " animate-spin" : "")} /> Regenerate
+          </SecondaryButton>
+          <SecondaryButton onClick={() => setStatus("approved")} disabled={remaining.length > 0 || c.status === "approved"}>
+            Approve
+          </SecondaryButton>
+          <div className="ml-auto flex gap-2">
+            <SecondaryButton onClick={copyText}><Copy className="h-4 w-4" /> Copy</SecondaryButton>
+            <SecondaryButton onClick={() => download("md")}><Download className="h-4 w-4" /> .md</SecondaryButton>
+            <SecondaryButton onClick={() => download("txt")}><Download className="h-4 w-4" /> .txt</SecondaryButton>
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function InlineConfirm({ cf, onResolve }: { cf: Confirm; onResolve: (val: string) => void }) {
+  const [val, setVal] = useState("");
+  return (
+    <li className="flex flex-wrap items-center gap-2">
+      <code className="rounded bg-background border border-border px-2 py-1 text-xs">[confirm: {cf.key}]</code>
+      <span className="text-sm text-muted-foreground">{cf.prompt}</span>
+      <div className="flex w-full sm:w-auto gap-2 mt-1 sm:mt-0">
+        <input
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          placeholder="Type the answer"
+          className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm"
+        />
+        <button
+          onClick={() => onResolve(val)}
+          disabled={!val.trim()}
+          className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm font-medium disabled:opacity-50"
+        >
+          Resolve
+        </button>
+      </div>
+    </li>
   );
 }
