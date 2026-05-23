@@ -9,6 +9,7 @@ type Common = {
   placeholder?: string;
   label?: string;
   hint?: string;
+  onBlur?: () => void;
 };
 
 export function VoiceField({
@@ -42,6 +43,7 @@ export function VoiceField({
           <textarea
             value={p.value}
             onChange={(e) => p.onChange(e.target.value)}
+            onBlur={p.onBlur}
             placeholder={p.placeholder}
             rows={rows}
             className="w-full rounded-md border border-input bg-card px-3 py-3 pr-14 text-base focus:outline-none focus:ring-2 focus:ring-ring resize-y"
@@ -50,6 +52,7 @@ export function VoiceField({
           <input
             value={p.value}
             onChange={(e) => p.onChange(e.target.value)}
+            onBlur={p.onBlur}
             placeholder={p.placeholder}
             className="w-full rounded-md border border-input bg-card px-3 py-3 pr-14 text-base focus:outline-none focus:ring-2 focus:ring-ring"
           />
