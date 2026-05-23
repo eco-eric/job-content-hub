@@ -4,23 +4,31 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { VoiceField } from "@/components/VoiceField";
-import { questionsFor } from "@/lib/interview";
+import { questionsFor, ARRAY_COLUMNS } from "@/lib/interview";
 import { Check } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId/interview")({
   component: Interview,
 });
 
+function fromColumn(v: unknown, isArray: boolean): string {
+  if (v == null) return "";
+  if (isArray && Array.isArray(v)) return v.join(", ");
+  return String(v);
+}
+
+function toColumn(value: string, isArray: boolean) {
+  if (isArray) return value.split(",").map(s => s.trim()).filter(Boolean);
+  return value.trim() ? value : null;
+}
+
 function Interview() {
   const { projectId } = Route.useParams();
   const qc = useQueryClient();
+
   const projectQ = useQuery({
     queryKey: ["project", projectId],
     queryFn: async () => (await supabase.from("projects").select("*").eq("id", projectId).single()).data,
-  });
-  const answersQ = useQuery({
-    queryKey: ["answers", projectId],
-    queryFn: async () => (await supabase.from("project_answers").select("*").eq("project_id", projectId)).data ?? [],
   });
 
   const project = projectQ.data;
@@ -28,32 +36,35 @@ function Interview() {
   const [vals, setVals] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!answersQ.data) return;
+    if (!project) return;
     const m: Record<string, string> = {};
-    for (const a of answersQ.data) {
-      const v = a.value as unknown;
-      m[a.question_key] = typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
+    for (const q of questions) {
+      m[q.key] = fromColumn((project as Record<string, unknown>)[q.key], ARRAY_COLUMNS.has(q.key));
     }
     setVals(m);
-  }, [answersQ.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, project?.worthiness_tag]);
 
-  // Debounced autosave per field
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const save = (key: string, value: string) => {
-    setVals((p) => ({ ...p, [key]: value }));
+    setVals(p => ({ ...p, [key]: value }));
     clearTimeout(timers.current[key]);
     timers.current[key] = setTimeout(async () => {
-      await supabase.from("project_answers").upsert(
-        { project_id: projectId, question_key: key, value: value || null },
-        { onConflict: "project_id,question_key" }
-      );
-      qc.invalidateQueries({ queryKey: ["answers", projectId] });
+      const payload: Record<string, unknown> = { [key]: toColumn(value, ARRAY_COLUMNS.has(key)) };
+      if (project?.status === "draft") payload.status = "in_progress";
+      await supabase.from("projects").update(payload).eq("id", projectId);
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
     }, 600);
   };
 
   if (projectQ.isLoading || !project) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
-  const filled = (k: string) => !!(vals[k] && vals[k].trim());
+  const filled = (k: string) => {
+    const v = vals[k];
+    if (!v) return false;
+    if (ARRAY_COLUMNS.has(k)) return v.split(",").some(s => s.trim());
+    return v.trim().length > 0;
+  };
 
   return (
     <div>
