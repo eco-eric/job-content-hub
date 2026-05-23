@@ -70,7 +70,18 @@ function Interview() {
 
   const queueSave = (q: Question, nextVal: string, nextCity?: string, nextNeighborhood?: string) => {
     if (persist.current) clearTimeout(persist.current);
-    persist.current = setTimeout(() => doSave(q, nextVal, nextCity, nextNeighborhood), 500);
+    persist.current = setTimeout(() => {
+      persist.current = null;
+      doSave(q, nextVal, nextCity, nextNeighborhood);
+    }, 800);
+  };
+
+  const flushSave = async (q: Question) => {
+    if (persist.current) {
+      clearTimeout(persist.current);
+      persist.current = null;
+      await doSave(q, value, city, neighborhood);
+    }
   };
 
   const doSave = async (q: Question, nextVal: string, nextCity?: string, nextNeighborhood?: string) => {
@@ -141,10 +152,7 @@ function Interview() {
 
   const goNext = async () => {
     const q = questions[step];
-    if (persist.current) {
-      clearTimeout(persist.current);
-      await doSave(q, value);
-    }
+    await flushSave(q);
     if (step < questions.length - 1) {
       setStep(step + 1);
     } else {
@@ -156,6 +164,12 @@ function Interview() {
       qc.invalidateQueries({ queryKey: ["project", projectId] });
       nav({ to: "/projects/$projectId", params: { projectId } });
     }
+  };
+
+  const goBack = async () => {
+    if (step === 0) return;
+    await flushSave(questions[step]);
+    setStep(step - 1);
   };
 
   if (projectQ.isLoading || !project) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -206,6 +220,7 @@ function Interview() {
                 <VoiceField
                   value={city}
                   onChange={(v) => { setCity(v); queueSave(q, value, v, neighborhood); }}
+                  onBlur={() => flushSave(q)}
                   placeholder="e.g. Boston"
                 />
               </div>
@@ -214,6 +229,7 @@ function Interview() {
                 <VoiceField
                   value={neighborhood}
                   onChange={(v) => { setNeighborhood(v); queueSave(q, value, city, v); }}
+                  onBlur={() => flushSave(q)}
                   placeholder="e.g. Jamaica Plain"
                 />
               </div>
@@ -222,6 +238,7 @@ function Interview() {
             <VoiceField
               value={value}
               onChange={(v) => { setValue(v); queueSave(q, v); }}
+              onBlur={() => flushSave(q)}
               multiline={q.multiline}
               rows={4}
               placeholder="Tap the mic, or type."
@@ -247,7 +264,7 @@ function Interview() {
       {/* Sticky bottom action bar */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur md:static md:bg-transparent md:border-0 md:mt-6">
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-3 md:px-0">
-          <SecondaryButton onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
+          <SecondaryButton onClick={goBack} disabled={step === 0}>
             Back
           </SecondaryButton>
           <Link to="/projects/$projectId" params={{ projectId }} className="ml-auto">
