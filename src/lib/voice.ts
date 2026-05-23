@@ -5,7 +5,15 @@ export type VoiceRecognizer = {
   supported: boolean;
 };
 
-type SRConstructor = new () => SpeechRecognition;
+interface SRInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SRConstructor = new () => SRInstance;
 
 export function createRecognizer(onResult: (text: string) => void): VoiceRecognizer {
   if (typeof window === "undefined") return { start: () => {}, stop: () => {}, supported: false };
