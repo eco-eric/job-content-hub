@@ -173,31 +173,72 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const auth = req.headers.get("Authorization") || "";
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const userClient = createClient(
+      supabaseUrl,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: auth } } },
     );
+    // Service role: used to load full project/company/intent rows server-side.
+    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { projectId, intent, channel, length, tone } = await req.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "content-type": "application/json" } });
 
-    const { data: project } = await supabase.from("projects").select("*").eq("id", projectId).single();
+    const { data: project } = await admin.from("projects").select("*").eq("id", projectId).single();
     if (!project) return new Response(JSON.stringify({ error: "Project not found" }), { status: 404, headers: { ...cors, "content-type": "application/json" } });
 
-    const { data: company } = await supabase.from("companies").select("*").eq("id", (project as { company_id: string }).company_id).maybeSingle();
+    const companyId = (project as { company_id: string }).company_id;
+    // Auth check: caller must own the company.
+    const { data: company } = await admin.from("companies").select("*").eq("id", companyId).maybeSingle();
+    if (!company || (company as { owner_user_id: string }).owner_user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "content-type": "application/json" } });
+    }
 
-    const result = buildDraft({
-      intent,
-      channel,
-      length,
-      tone,
-      project: project as Record<string, unknown>,
-      company: (company ?? {}) as Record<string, unknown>,
-    });
-    return new Response(JSON.stringify(result), { headers: { ...cors, "content-type": "application/json" } });
+    const { data: intentRow } = await admin
+      .from("content_intents")
+      .select("notes")
+      .eq("project_id", projectId)
+      .eq("intent_type", intent)
+      .maybeSingle();
+    const intentNotes = (intentRow?.notes ?? {}) as Record<string, unknown>;
+
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    let result: { headline: string; body: string; hashtags: string[]; flagged_unknowns: Confirm[] };
+    let modelUsed = MODEL;
+
+    if (!apiKey) {
+      console.error("ANTHROPIC_API_KEY missing — using stub fallback");
+      result = buildDraft({ intent, channel, length, tone, project: project as Record<string, unknown>, company: company as Record<string, unknown> });
+      modelUsed = "stub-fallback";
+    } else {
+      try {
+        result = await callAnthropic({
+          apiKey,
+          intent, channel, length, tone,
+          project: project as Record<string, unknown>,
+          company: company as Record<string, unknown>,
+          intentNotes,
+        });
+      } catch (err) {
+        console.error("Anthropic call failed:", err instanceof Error ? err.message : String(err));
+        result = buildDraft({ intent, channel, length, tone, project: project as Record<string, unknown>, company: company as Record<string, unknown> });
+        modelUsed = "stub-fallback";
+      }
+    }
+
+    const payload = {
+      ...result,
+      generation_metadata: {
+        model: modelUsed,
+        prompt_version: PROMPT_VERSION,
+        generated_at: new Date().toISOString(),
+      },
+    };
+    return new Response(JSON.stringify(payload), { headers: { ...cors, "content-type": "application/json" } });
   } catch (e) {
+    console.error("generate-content fatal:", e instanceof Error ? e.message : String(e));
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...cors, "content-type": "application/json" } });
   }
 });
