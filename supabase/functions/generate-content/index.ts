@@ -1,12 +1,14 @@
-// Generation seam — DETERMINISTIC STUB.
+// Generation seam — real LLM (Anthropic) with deterministic stub fallback.
 //
 // CRITICAL CONTRACT — NEVER INVENT FACTS.
-// For every required Layer-1 project column that is empty (null / "" / []),
-// the body contains a [confirm: <column>] token AND `flagged_unknowns`
-// includes the same key. Swap the body of buildDraft() for an LLM later —
-// keep this contract intact.
+// Empty Layer-1 project fields MUST surface as [confirm: <key>] tokens in
+// the body AND entries in `flagged_unknowns`. The model is instructed to
+// emit them; a post-generation scan catches any it missed.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const PROMPT_VERSION = "v1-anthropic";
+const MODEL = "claude-sonnet-4-20250514";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
