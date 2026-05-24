@@ -8,6 +8,7 @@ export type GenerateResult = {
   body: string;
   hashtags?: string[];
   flagged_unknowns: UnresolvedConfirm[];
+  generation_metadata?: { model: string; prompt_version: string; generated_at: string };
 };
 
 export type LengthVariant = "short" | "medium" | "long";
