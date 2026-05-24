@@ -86,7 +86,7 @@ function Generate() {
               body: result.body,
               hashtags: result.hashtags ?? [],
               flagged_unknowns: result.flagged_unknowns,
-              generation_metadata: { generated_at: new Date().toISOString(), prompt_version: "v0-stub", model: "stub" },
+              generation_metadata: result.generation_metadata ?? { generated_at: new Date().toISOString(), prompt_version: "unknown", model: "unknown" },
             })
             .select("id")
             .single();
