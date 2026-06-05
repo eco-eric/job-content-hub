@@ -6,7 +6,8 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInWithMagicLink: (email: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -32,9 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     session,
     loading,
-    signInWithMagicLink: async (email) => {
-      const { error } = await supabase.auth.signInWithOtp({
+    signIn: async (email, password) => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error as Error | null };
+    },
+    signUp: async (email, password) => {
+      const { error } = await supabase.auth.signUp({
         email,
+        password,
         options: { emailRedirectTo: window.location.origin + "/dashboard" },
       });
       return { error: error as Error | null };
