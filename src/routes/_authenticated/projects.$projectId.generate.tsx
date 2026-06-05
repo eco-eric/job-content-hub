@@ -5,7 +5,18 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { VoiceField } from "@/components/VoiceField";
-import { INTENTS, INTENT_FOLLOWUPS, CHANNELS, ALL_CHANNELS, type IntentId, type ChannelId } from "@/lib/constants";
+import {
+  INTENTS,
+  INTENT_FOLLOWUPS,
+  CHANNELS,
+  ALL_CHANNELS,
+  AUDIENCES,
+  AUDIENCE_CHANNELS,
+  INTENT_DEFAULT_AUDIENCE,
+  type IntentId,
+  type ChannelId,
+  type AudienceId,
+} from "@/lib/constants";
 import { generateContent } from "@/lib/generation";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId/generate")({
@@ -28,16 +39,48 @@ function Generate() {
     : ALL_CHANNELS) as ChannelId[]);
 
   const [selected, setSelected] = useState<IntentId[]>([]);
+  const [audienceByIntent, setAudienceByIntent] = useState<Record<string, AudienceId>>({});
+  const [channelsByIntent, setChannelsByIntent] = useState<Record<string, ChannelId[]>>({});
   const [notes, setNotes] = useState<Record<string, Record<string, string>>>({});
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<"intents" | "followups">("intents");
   const [error, setError] = useState<string | null>(null);
 
+  const allowedChannelsFor = (a: AudienceId): ChannelId[] =>
+    AUDIENCE_CHANNELS[a].filter((c) => enabledChannels.includes(c));
+
   const toggleIntent = (id: IntentId) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      // Seed audience + channels on first selection.
+      const defaultAud = INTENT_DEFAULT_AUDIENCE[id];
+      setAudienceByIntent((m) => ({ ...m, [id]: m[id] ?? defaultAud }));
+      setChannelsByIntent((m) => ({ ...m, [id]: m[id] ?? allowedChannelsFor(defaultAud) }));
+      return [...prev, id];
+    });
+
+  const changeAudience = (intent: IntentId, audience: AudienceId) => {
+    setAudienceByIntent((m) => ({ ...m, [intent]: audience }));
+    const allowed = allowedChannelsFor(audience);
+    setChannelsByIntent((m) => {
+      const current = m[intent] ?? [];
+      const kept = current.filter((c) => allowed.includes(c));
+      // If nothing kept, default to all allowed.
+      return { ...m, [intent]: kept.length ? kept : allowed };
+    });
+  };
+
+  const toggleChannelFor = (intent: IntentId, channel: ChannelId) => {
+    setChannelsByIntent((m) => {
+      const cur = m[intent] ?? [];
+      return { ...m, [intent]: cur.includes(channel) ? cur.filter((c) => c !== channel) : [...cur, channel] };
+    });
+  };
 
   const setNote = (intent: IntentId, key: string, val: string) =>
     setNotes((prev) => ({ ...prev, [intent]: { ...(prev[intent] ?? {}), [key]: val } }));
+
+  const totalAssets = selected.reduce((sum, i) => sum + (channelsByIntent[i]?.length ?? 0), 0);
 
   const generateAll = async () => {
     if (!selected.length) return;
@@ -46,6 +89,9 @@ function Generate() {
     try {
       let firstAssetId: string | null = null;
       for (const intent of selected) {
+        const audience = audienceByIntent[intent] ?? INTENT_DEFAULT_AUDIENCE[intent];
+        const intentChannels = channelsByIntent[intent] ?? [];
+        if (!intentChannels.length) continue;
         // Upsert content_intents row.
         const { data: existing } = await supabase
           .from("content_intents")
@@ -56,11 +102,11 @@ function Generate() {
         const intentNotes = notes[intent] ?? {};
         let intentId = existing?.id;
         if (intentId) {
-          await supabase.from("content_intents").update({ notes: intentNotes }).eq("id", intentId);
+          await supabase.from("content_intents").update({ notes: intentNotes, audience }).eq("id", intentId);
         } else {
           const { data: created, error: ce } = await supabase
             .from("content_intents")
-            .insert({ project_id: projectId, intent_type: intent, notes: intentNotes })
+            .insert({ project_id: projectId, intent_type: intent, notes: intentNotes, audience })
             .select("id")
             .single();
           if (ce || !created) throw ce ?? new Error("Could not create intent");
@@ -72,15 +118,15 @@ function Generate() {
           await supabase.from("projects").update({ customer_quote: intentNotes.customer_quote.trim() }).eq("id", projectId);
         }
 
-        // One asset per enabled channel.
-        for (const channel of enabledChannels) {
-          const result = await generateContent({ projectId, intent, channel });
+        for (const channel of intentChannels) {
+          const result = await generateContent({ projectId, intent, channel, audience });
           const { data: asset, error: ie } = await supabase
             .from("content_assets")
             .insert({
               project_id: projectId,
               intent_id: intentId,
               channel,
+              audience,
               status: "draft",
               headline: result.headline,
               body: result.body,
@@ -107,7 +153,7 @@ function Generate() {
     <div className="pb-32">
       <PageHeader
         title="Generate content"
-        subtitle="Pick the angles. We'll draft one piece per angle for every channel you've enabled."
+        subtitle="Pick the angles, then choose who each one is for and which channels to fan out to."
         right={
           <Link to="/projects/$projectId" params={{ projectId }}>
             <SecondaryButton>Back</SecondaryButton>
@@ -116,27 +162,84 @@ function Generate() {
       />
 
       {step === "intents" && (
-        <Card>
-          <h2 className="font-medium mb-4">1. What angles do you want?</h2>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {INTENTS.map((i) => (
-              <button
-                key={i.id}
-                onClick={() => toggleIntent(i.id)}
-                className={
-                  "text-left rounded-md border p-4 transition-colors " +
-                  (selected.includes(i.id) ? "border-primary bg-primary/5" : "border-input hover:border-foreground/40")
-                }
-              >
-                <div className="font-medium">{i.label}</div>
-                <div className="text-sm text-muted-foreground mt-1">{i.blurb}</div>
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-4">
-            Channels: {enabledChannels.map((c) => CHANNELS.find((ch) => ch.id === c)?.label).join(", ")}.
-          </p>
-        </Card>
+        <div className="space-y-3">
+          <Card>
+            <h2 className="font-medium mb-4">1. What angles do you want?</h2>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {INTENTS.map((i) => (
+                <button
+                  key={i.id}
+                  onClick={() => toggleIntent(i.id)}
+                  className={
+                    "text-left rounded-md border p-4 transition-colors " +
+                    (selected.includes(i.id) ? "border-primary bg-primary/5" : "border-input hover:border-foreground/40")
+                  }
+                >
+                  <div className="font-medium">{i.label}</div>
+                  <div className="text-sm text-muted-foreground mt-1">{i.blurb}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {selected.map((intentId) => {
+            const intent = INTENTS.find((i) => i.id === intentId)!;
+            const audience = audienceByIntent[intentId] ?? INTENT_DEFAULT_AUDIENCE[intentId];
+            const allowed = allowedChannelsFor(audience);
+            const picked = channelsByIntent[intentId] ?? [];
+            return (
+              <Card key={intentId}>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-medium">{intent.label}</div>
+                    <div className="text-xs text-muted-foreground">{intent.blurb}</div>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[200px_1fr]">
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1">Audience</label>
+                    <select
+                      value={audience}
+                      onChange={(e) => changeAudience(intentId, e.target.value as AudienceId)}
+                      className="w-full h-11 rounded-md border border-input bg-card px-3 text-sm"
+                    >
+                      {AUDIENCES.map((a) => (
+                        <option key={a.id} value={a.id}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1">Channels</label>
+                    <div className="flex flex-wrap gap-2">
+                      {allowed.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No enabled channels match this audience. Enable channels in Settings.</p>
+                      )}
+                      {allowed.map((c) => {
+                        const on = picked.includes(c);
+                        return (
+                          <button
+                            key={c}
+                            onClick={() => toggleChannelFor(intentId, c)}
+                            className={
+                              "min-h-11 px-3 rounded-full border text-sm transition-colors " +
+                              (on ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input hover:border-foreground/40")
+                            }
+                          >
+                            {CHANNELS.find((ch) => ch.id === c)?.label ?? c}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+
+          {selected.length > 0 && (
+            <p className="text-sm text-muted-foreground px-1">Will generate {totalAssets} {totalAssets === 1 ? "asset" : "assets"}.</p>
+          )}
+        </div>
       )}
 
       {step === "followups" && (
@@ -173,12 +276,12 @@ function Generate() {
             <SecondaryButton onClick={() => setStep("intents")}>Back</SecondaryButton>
           )}
           {step === "intents" ? (
-            <PrimaryButton onClick={() => setStep("followups")} disabled={selected.length === 0} className="ml-auto">
+            <PrimaryButton onClick={() => setStep("followups")} disabled={selected.length === 0 || totalAssets === 0} className="ml-auto">
               Next
             </PrimaryButton>
           ) : (
             <PrimaryButton onClick={generateAll} disabled={busy} className="ml-auto">
-              {busy ? "Generating…" : `Generate ${selected.length * enabledChannels.length} drafts`}
+              {busy ? "Generating…" : `Generate ${totalAssets} ${totalAssets === 1 ? "draft" : "drafts"}`}
             </PrimaryButton>
           )}
         </div>
