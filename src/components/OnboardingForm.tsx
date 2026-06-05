@@ -503,6 +503,58 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function AudienceToneCard({
+  id,
+  label,
+  blurb,
+  value,
+  onChange,
+  onReset,
+}: {
+  id: AudienceId;
+  label: string;
+  blurb: string;
+  value: string;
+  onChange: (v: string) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border bg-background">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-3 text-left"
+        aria-expanded={open}
+        aria-controls={`audience-tone-${id}`}
+      >
+        <div>
+          <div className="font-medium">{label}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{blurb}</div>
+        </div>
+        <ChevronDown className={"h-4 w-4 text-muted-foreground transition-transform " + (open ? "rotate-180" : "")} />
+      </button>
+      {open && (
+        <div id={`audience-tone-${id}`} className="px-3 pb-3 space-y-2">
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={5}
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm leading-relaxed"
+          />
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-3 w-3" /> Restore default
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionHeader({ h, sub }: { h: string; sub: string }) {
   return (
     <div className="mb-4">
