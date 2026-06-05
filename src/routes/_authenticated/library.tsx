@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader, Card, Chip, StatusBadge } from "@/components/AppShell";
-import { CHANNELS, INTENTS, type ChannelId, type IntentId } from "@/lib/constants";
+import { CHANNELS, INTENTS, AUDIENCES, AUDIENCE_CHIP, type ChannelId, type IntentId, type AudienceId } from "@/lib/constants";
 import { ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/library")({
@@ -19,6 +19,7 @@ function Library() {
   const [projectId, setProjectId] = useState<string | "all">("all");
   const [intent, setIntent] = useState<IntentId | "all">("all");
   const [channel, setChannel] = useState<ChannelId | "all">("all");
+  const [audience, setAudience] = useState<AudienceId | "all">("all");
 
   const projectsQ = useQuery({
     enabled: !!user,
@@ -28,15 +29,16 @@ function Library() {
 
   const contentQ = useQuery({
     enabled: !!user,
-    queryKey: ["content", user?.id, status, projectId, intent, channel],
+    queryKey: ["content", user?.id, status, projectId, intent, channel, audience],
     queryFn: async () => {
       let q = supabase
         .from("content_assets")
-        .select("id,headline,channel,status,updated_at,project_id,content_intents!inner(intent_type)")
+        .select("id,headline,channel,status,updated_at,project_id,audience,content_intents!inner(intent_type)")
         .order("updated_at", { ascending: false });
       if (status !== "all") q = q.eq("status", status);
       if (projectId !== "all") q = q.eq("project_id", projectId);
       if (channel !== "all") q = q.eq("channel", channel);
+      if (audience !== "all") q = q.eq("audience", audience);
       if (intent !== "all") q = q.eq("content_intents.intent_type", intent);
       const { data, error } = await q;
       if (error) throw error;
@@ -63,6 +65,13 @@ function Library() {
         ))}
       </FilterGroup>
 
+      <FilterGroup label="Audience">
+        <Chip active={audience === "all"} onClick={() => setAudience("all")}>All</Chip>
+        {AUDIENCES.map((a) => (
+          <Chip key={a.id} active={audience === a.id} onClick={() => setAudience(a.id)}>{a.label}</Chip>
+        ))}
+      </FilterGroup>
+
       <FilterGroup label="Channel">
         <Chip active={channel === "all"} onClick={() => setChannel("all")}>All</Chip>
         {CHANNELS.map((c) => (
@@ -85,6 +94,8 @@ function Library() {
             const intentType = (c as { content_intents?: { intent_type?: string } | null }).content_intents?.intent_type;
             const intentLabel = INTENTS.find((i) => i.id === intentType)?.label ?? intentType ?? "";
             const channelLabel = CHANNELS.find((ch) => ch.id === c.channel)?.label ?? c.channel;
+            const aud = ((c as { audience?: AudienceId }).audience ?? "homeowner") as AudienceId;
+            const audLabel = AUDIENCES.find((a) => a.id === aud)?.label ?? aud;
             return (
               <Link key={c.id} to="/content/$contentId" params={{ contentId: c.id }}>
                 <Card className="flex items-center justify-between hover:border-foreground/40">
@@ -95,6 +106,9 @@ function Library() {
                       <span>{intentLabel}</span>
                       <span>·</span>
                       <span>{channelLabel}</span>
+                      <span className={"inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium " + AUDIENCE_CHIP[aud]}>
+                        {audLabel}
+                      </span>
                       <span>· {new Date(c.updated_at).toLocaleDateString()}</span>
                     </div>
                   </div>
