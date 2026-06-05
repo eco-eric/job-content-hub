@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
+          audience_tone_modifiers: Json
           channels_enabled: string[]
           created_at: string
           customer_types: string[]
@@ -32,6 +33,7 @@ export type Database = {
           voice_tone_keywords: string[]
         }
         Insert: {
+          audience_tone_modifiers?: Json
           channels_enabled?: string[]
           created_at?: string
           customer_types?: string[]
@@ -48,6 +50,7 @@ export type Database = {
           voice_tone_keywords?: string[]
         }
         Update: {
+          audience_tone_modifiers?: Json
           channels_enabled?: string[]
           created_at?: string
           customer_types?: string[]
@@ -67,6 +70,7 @@ export type Database = {
       }
       content_assets: {
         Row: {
+          audience: string
           body: string
           channel: string
           created_at: string
@@ -86,6 +90,7 @@ export type Database = {
           version_history: Json
         }
         Insert: {
+          audience?: string
           body?: string
           channel: string
           created_at?: string
@@ -105,6 +110,7 @@ export type Database = {
           version_history?: Json
         }
         Update: {
+          audience?: string
           body?: string
           channel?: string
           created_at?: string
@@ -142,6 +148,7 @@ export type Database = {
       }
       content_intents: {
         Row: {
+          audience: string
           created_at: string
           id: string
           intent_type: string
@@ -150,6 +157,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audience?: string
           created_at?: string
           id?: string
           intent_type: string
@@ -158,6 +166,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audience?: string
           created_at?: string
           id?: string
           intent_type?: string
