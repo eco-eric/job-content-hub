@@ -7,7 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const PROMPT_VERSION = "v1-anthropic";
+const PROMPT_VERSION = "v2-anthropic-audience";
 const MODEL = "claude-sonnet-4-20250514";
 
 const cors = {
@@ -176,6 +176,7 @@ const CHANNEL_SPEC: Record<string, string> = {
   case_study: "Format: a single H1 markdown headline, then ~300-450 words structured as **Problem**, **Approach**, **Result** sections. End with the CTA exactly once.",
   facebook: "Format: NO headline. 80-150 words, conversational, first-person, one CTA. Plain text only.",
   instagram: "Format: a caption of 60-125 words (plain text, no markdown), then a blank line, then 5-8 relevant hashtags on the final line (e.g. #HVAC #Brooklyn). No headline.",
+  internal_doc: "Format: structured Markdown reference document. Lead with an H1 headline naming the topic. Use H2 sections (e.g., Symptoms, Diagnosis, Common causes, Standard procedure, Pitfalls, Customer-facing explanation). Bullet lists where helpful. Length 300-700 words. No CTA. No promotional language.",
 };
 
 const LENGTH_HINT: Record<string, string> = {
@@ -195,21 +196,40 @@ function jsonOmitEmpty(obj: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-function buildSystemPrompt(): string {
+const DEFAULT_AUDIENCE_TONES: Record<string, string> = {
+  homeowner: "Explain HVAC concepts in plain language. Never assume the reader knows trade jargon — when a technical term is necessary, define it briefly inline. Tone is warm, patient, and respectful of the reader's intelligence. Avoid talking down.",
+  tech_training: "Assume the reader is a junior or apprentice HVAC technician with baseline literacy. Use trade vocabulary precisely. Show diagnostic reasoning step by step. Include the WHY behind each decision, not just the WHAT.",
+  sales_training: "Assume the reader is a salesperson who needs to talk credibly about the work to customers. Emphasize value framing, common customer objections, and how to translate technical work into outcomes the customer feels. Avoid deep diagnostic detail.",
+  knowledge_base: "Reference-style: dense, factual, scannable. Lead with the conclusion. Use short paragraphs and structure (headings, lists where appropriate). Assume the reader is searching for a specific answer, not reading start-to-finish.",
+};
+
+function isInternal(audience: string, channel: string): boolean {
+  return audience === "knowledge_base" || channel === "internal_doc";
+}
+
+function buildSystemPrompt(audience: string, channel: string, audienceTone: string): string {
+  const internal = isInternal(audience, channel);
   return [
     "You are a marketing coordinator for a trade business. Write trade-accurate content in the company's own voice.",
     "HARD RULES:",
     "(a) NEVER invent facts. If a specific detail (brand, model number, warranty length, price, date, customer name, exact measurement, neighborhood) is not present in the provided project data, do NOT guess — insert a placeholder in the EXACT form [confirm: <short question>]. Example: [confirm: what brand of furnace?].",
-    "(b) Include the chosen call-to-action exactly once, near the end.",
-    "(c) For blog and seo channels, naturally include the city or neighborhood from the project location in the body and (where applicable) the headline.",
+    internal
+      ? "(b) This is INTERNAL content — no call-to-action. End with a concise summary instead."
+      : "(b) Include the chosen call-to-action exactly once, near the end.",
+    "(c) For customer-facing blog/seo content, naturally include the city or neighborhood from the project location in the body and (where applicable) the headline.",
     "(d) Match the company's VOICE SAMPLES — imitate their rhythm, sentence length, and word choice. Do NOT copy the example content into your output; only mirror the style.",
     "(e) Output ONLY the requested asset. No preamble, no explanation, no meta commentary, no surrounding quotes or code fences.",
+    "",
+    "=== AUDIENCE PERSONA ===",
+    `Audience: ${audience}`,
+    audienceTone,
   ].join("\n");
 }
 
 function buildUserPrompt(args: {
   intent: string;
   channel: string;
+  audience: string;
   length?: string;
   tone?: string | null;
   project: Record<string, unknown>;
@@ -217,6 +237,7 @@ function buildUserPrompt(args: {
   intentNotes: Record<string, unknown>;
 }): string {
   const sections: string[] = [];
+  const internal = isInternal(args.audience, args.channel);
 
   // LAYER 2 — Company
   const companyName = (args.company.name as string) || "";
@@ -255,13 +276,18 @@ function buildUserPrompt(args: {
   // Pick one CTA. Future: caller picks; for now first standard CTA.
   const ctas = Array.isArray(args.company.standard_ctas) ? (args.company.standard_ctas as Array<Record<string, unknown>>) : [];
   const cta = ctas[0] ?? null;
-  sections.push("\n=== CALL TO ACTION (use exactly once) ===");
-  if (cta) {
-    const label = (cta.label as string) || "[confirm: cta]";
-    const dest = (cta.destination as string) || "";
-    sections.push(dest ? `${label} (${dest})` : label);
+  if (internal) {
+    sections.push("\n=== CALL TO ACTION ===");
+    sections.push("(Internal content — no call-to-action. End with a concise summary instead.)");
   } else {
-    sections.push("[confirm: cta]");
+    sections.push("\n=== CALL TO ACTION (use exactly once) ===");
+    if (cta) {
+      const label = (cta.label as string) || "[confirm: cta]";
+      const dest = (cta.destination as string) || "";
+      sections.push(dest ? `${label} (${dest})` : label);
+    } else {
+      sections.push("[confirm: cta]");
+    }
   }
 
   // LAYER 3 — Project (omit empties)
@@ -298,6 +324,7 @@ function buildUserPrompt(args: {
   // LAYER 4 — Output spec
   sections.push("\n=== OUTPUT SPEC ===");
   sections.push(`Intent: ${args.intent}`);
+  sections.push(`Audience: ${args.audience}`);
   sections.push(`Channel: ${args.channel}`);
   sections.push(LENGTH_HINT[args.length ?? "medium"] ?? LENGTH_HINT.medium);
   if (args.tone === "more_technical") sections.push("Tone override: more technical — assume the reader is another tradesperson; use precise terminology.");
@@ -360,13 +387,15 @@ async function callAnthropic(args: {
   apiKey: string;
   intent: string;
   channel: string;
+  audience: string;
+  audienceTone: string;
   length?: string;
   tone?: string | null;
   project: Record<string, unknown>;
   company: Record<string, unknown>;
   intentNotes: Record<string, unknown>;
 }): Promise<{ headline: string; body: string; hashtags: string[]; flagged_unknowns: Confirm[] }> {
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt(args.audience, args.channel, args.audienceTone);
   const user = buildUserPrompt(args);
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -409,7 +438,8 @@ Deno.serve(async (req) => {
     );
     // Service role: used to load full project/company/intent rows server-side.
     const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { projectId, intent, channel, length, tone } = await req.json();
+    const { projectId, intent, channel, length, tone, audience: audienceIn } = await req.json();
+    const audience = (audienceIn && typeof audienceIn === "string" ? audienceIn : "homeowner");
 
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "content-type": "application/json" } });
@@ -423,6 +453,9 @@ Deno.serve(async (req) => {
     if (!company || (company as { owner_user_id: string }).owner_user_id !== user.id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "content-type": "application/json" } });
     }
+
+    const tones = ((company as { audience_tone_modifiers?: Record<string, string> }).audience_tone_modifiers) ?? {};
+    const audienceTone = (tones[audience] && String(tones[audience]).trim()) || DEFAULT_AUDIENCE_TONES[audience] || DEFAULT_AUDIENCE_TONES.homeowner;
 
     const { data: intentRow } = await admin
       .from("content_intents")
@@ -445,6 +478,7 @@ Deno.serve(async (req) => {
         result = await callAnthropic({
           apiKey,
           intent, channel, length, tone,
+          audience, audienceTone,
           project: project as Record<string, unknown>,
           company: company as Record<string, unknown>,
           intentNotes,
@@ -461,6 +495,7 @@ Deno.serve(async (req) => {
       generation_metadata: {
         model: modelUsed,
         prompt_version: PROMPT_VERSION,
+        audience,
         generated_at: new Date().toISOString(),
       },
     };
