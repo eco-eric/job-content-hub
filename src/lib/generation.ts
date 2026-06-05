@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { ChannelId, IntentId } from "@/lib/constants";
+import type { ChannelId, IntentId, AudienceId } from "@/lib/constants";
 
 export type UnresolvedConfirm = { key: string; prompt: string };
 
@@ -25,6 +25,7 @@ export async function generateContent(args: {
   projectId: string;
   intent: IntentId;
   channel: ChannelId;
+  audience: AudienceId;
   length?: LengthVariant;
   tone?: ToneOverride | null;
 }): Promise<GenerateResult> {

@@ -21,10 +21,44 @@ export const CHANNELS = [
   { id: "facebook", label: "Facebook post", blurb: "Conversational, 80–150 words." },
   { id: "instagram", label: "Instagram caption", blurb: "Short hook + a few hashtags." },
   { id: "case_study", label: "Case study", blurb: "Problem → Approach → Result." },
+  { id: "internal_doc", label: "Internal doc", blurb: "Reference doc — no marketing, no CTA." },
 ] as const;
 
 export type ChannelId = (typeof CHANNELS)[number]["id"];
 export const ALL_CHANNELS: ChannelId[] = CHANNELS.map(c => c.id);
+
+// ---------- AUDIENCES ----------
+export const AUDIENCES = [
+  { id: "homeowner", label: "Homeowner", blurb: "Customer-facing. Plain language, no jargon." },
+  { id: "tech_training", label: "Tech training", blurb: "Apprentice/junior techs. Trade vocab + diagnostic reasoning." },
+  { id: "sales_training", label: "Sales training", blurb: "Salespeople. Value framing + customer objections." },
+  { id: "knowledge_base", label: "Knowledge base", blurb: "Internal reference. Scannable, factual." },
+] as const;
+export type AudienceId = (typeof AUDIENCES)[number]["id"];
+
+// Smart-default audience per intent.
+export const INTENT_DEFAULT_AUDIENCE: Record<IntentId, AudienceId> = {
+  educational: "homeowner",
+  seo: "homeowner",
+  social_proof: "homeowner",
+  process: "tech_training",
+};
+
+// Which channels make sense for each audience.
+export const AUDIENCE_CHANNELS: Record<AudienceId, ChannelId[]> = {
+  homeowner: ["blog", "facebook", "instagram", "case_study"],
+  tech_training: ["blog", "internal_doc", "case_study"],
+  sales_training: ["internal_doc", "case_study"],
+  knowledge_base: ["internal_doc"],
+};
+
+// Color hint for audience chips. Keep token-friendly (Tailwind utility classes).
+export const AUDIENCE_CHIP: Record<AudienceId, string> = {
+  homeowner: "bg-blue-500/10 text-blue-600 border-blue-500/30 dark:text-blue-400",
+  tech_training: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:text-emerald-400",
+  sales_training: "bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400",
+  knowledge_base: "bg-muted text-muted-foreground border-border",
+};
 
 export const WORTHINESS_TAGS = [
   { id: "unusual_problem", label: "Unusual problem" },

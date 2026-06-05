@@ -10,13 +10,27 @@ import {
   STANDARD_CTAS,
   CHANNELS,
   ALL_CHANNELS,
+  AUDIENCES,
+  type AudienceId,
   type ChannelId,
 } from "@/lib/constants";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, RotateCcw } from "lucide-react";
 
 type ServiceLine = { id: string; name: string; description: string; keywords: string[] };
 type CTA = { id: string; label: string; type: string; destination: string };
 type VoiceExample = { label: string; paragraph: string };
+type AudienceTones = Record<AudienceId, string>;
+
+const DEFAULT_AUDIENCE_TONES: AudienceTones = {
+  homeowner:
+    "Explain HVAC concepts in plain language. Never assume the reader knows trade jargon — when a technical term is necessary, define it briefly inline. Tone is warm, patient, and respectful of the reader's intelligence. Avoid talking down.",
+  tech_training:
+    "Assume the reader is a junior or apprentice HVAC technician with baseline literacy. Use trade vocabulary precisely. Show diagnostic reasoning step by step. Include the WHY behind each decision, not just the WHAT.",
+  sales_training:
+    "Assume the reader is a salesperson who needs to talk credibly about the work to customers. Emphasize value framing, common customer objections, and how to translate technical work into outcomes the customer feels. Avoid deep diagnostic detail.",
+  knowledge_base:
+    "Reference-style: dense, factual, scannable. Lead with the conclusion. Use short paragraphs and structure (headings, lists where appropriate). Assume the reader is searching for a specific answer, not reading start-to-finish.",
+};
 
 const CUSTOMER_TYPE_OPTIONS = [
   { id: "residential", label: "Residential" },
@@ -59,6 +73,7 @@ export function OnboardingForm({
   const [voicePrimaryText, setVoicePrimaryText] = useState<string>(VOICE_SAMPLES[0].paragraph);
   const [voiceOwnText, setVoiceOwnText] = useState<string>("");
   const [channels, setChannels] = useState<ChannelId[]>([...ALL_CHANNELS]);
+  const [audienceTones, setAudienceTones] = useState<AudienceTones>(DEFAULT_AUDIENCE_TONES);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +105,10 @@ export function OnboardingForm({
     }
     setVoiceOwnText(ex[1]?.paragraph ?? "");
     setChannels((c.channels_enabled?.length ? c.channels_enabled : ALL_CHANNELS) as ChannelId[]);
+    const at = (c as { audience_tone_modifiers?: Partial<AudienceTones> | null }).audience_tone_modifiers;
+    if (at && typeof at === "object") {
+      setAudienceTones({ ...DEFAULT_AUDIENCE_TONES, ...at });
+    }
   }, [companyQ.data]);
 
   const addArea = () => {
@@ -152,6 +171,7 @@ export function OnboardingForm({
       standard_ctas: ctas,
       voice_examples: voiceExamples,
       channels_enabled: channels,
+      audience_tone_modifiers: audienceTones,
     };
     const existing = companyQ.data;
     const { error: err } = existing
@@ -360,6 +380,28 @@ export function OnboardingForm({
     </Card>
   );
 
+  const AudienceTonesSection = (
+    <Card>
+      <SectionHeader
+        h="How should we write for different audiences?"
+        sub="These are starting points — you can edit them anytime. Defaults are good enough to ship, so feel free to skip."
+      />
+      <div className="space-y-3">
+        {AUDIENCES.map((a) => (
+          <AudienceToneCard
+            key={a.id}
+            id={a.id}
+            label={a.label}
+            blurb={a.blurb}
+            value={audienceTones[a.id]}
+            onChange={(v) => setAudienceTones((prev) => ({ ...prev, [a.id]: v }))}
+            onReset={() => setAudienceTones((prev) => ({ ...prev, [a.id]: DEFAULT_AUDIENCE_TONES[a.id] }))}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+
   const steps = useMemo(
     () => [
       { label: "Basics", node: BasicsSection },
@@ -367,9 +409,10 @@ export function OnboardingForm({
       { label: "Voice", node: VoiceSection },
       { label: "Differentiators & CTAs", node: <div className="space-y-6">{DifferentiatorsSection}{CTAsSection}</div> },
       { label: "Channels", node: ChannelsSection },
+      { label: "Audiences", node: AudienceTonesSection },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [name, areas, areaInput, customerTypes, serviceLines, differentiators, diffInput, ctas, voicePrimaryLabel, voicePrimaryText, voiceOwnText, channels],
+    [name, areas, areaInput, customerTypes, serviceLines, differentiators, diffInput, ctas, voicePrimaryLabel, voicePrimaryText, voiceOwnText, channels, audienceTones],
   );
 
   if (mode === "single") {
@@ -381,6 +424,7 @@ export function OnboardingForm({
         {DifferentiatorsSection}
         {CTAsSection}
         {ChannelsSection}
+        {AudienceTonesSection}
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-3">
           <PrimaryButton onClick={save} disabled={saving || !canSave}>
@@ -429,7 +473,7 @@ export function OnboardingForm({
         </SecondaryButton>
         {isLast ? (
           <PrimaryButton onClick={save} disabled={saving || !canSave}>
-            {saving ? "Saving…" : ctaLabel}
+            {saving ? "Saving…" : ctaLabel === "Save" ? "Looks good, finish" : ctaLabel}
           </PrimaryButton>
         ) : (
           <PrimaryButton onClick={() => setStep(step + 1)} disabled={step === 0 && !name.trim()}>
@@ -455,6 +499,58 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-sm font-medium mb-2">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function AudienceToneCard({
+  id,
+  label,
+  blurb,
+  value,
+  onChange,
+  onReset,
+}: {
+  id: AudienceId;
+  label: string;
+  blurb: string;
+  value: string;
+  onChange: (v: string) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border bg-background">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-3 text-left"
+        aria-expanded={open}
+        aria-controls={`audience-tone-${id}`}
+      >
+        <div>
+          <div className="font-medium">{label}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{blurb}</div>
+        </div>
+        <ChevronDown className={"h-4 w-4 text-muted-foreground transition-transform " + (open ? "rotate-180" : "")} />
+      </button>
+      {open && (
+        <div id={`audience-tone-${id}`} className="px-3 pb-3 space-y-2">
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={5}
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm leading-relaxed"
+          />
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-3 w-3" /> Restore default
+          </button>
+        </div>
+      )}
     </div>
   );
 }
