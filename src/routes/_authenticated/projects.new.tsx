@@ -23,8 +23,7 @@ const CUSTOMER_TYPES = [
 function NewProject() {
   const { user } = useAuth();
   const nav = useNavigate();
-  const [serviceLineId, setServiceLineId] = useState<string>("");
-  const [serviceName, setServiceName] = useState<string>("");
+  const [serviceLineIds, setServiceLineIds] = useState<string[]>([]);
   const [city, setCity] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [customerType, setCustomerType] = useState("");
@@ -42,20 +41,21 @@ function NewProject() {
     queryFn: async () => (await supabase.from("companies").select("id,service_lines").eq("owner_user_id", user!.id).maybeSingle()).data,
   });
   const lines = (Array.isArray(companyQ.data?.service_lines) ? companyQ.data!.service_lines : []) as unknown as ServiceLine[];
+  const serviceNames = serviceLineIds
+    .map((id) => lines.find((l) => l.id === id)?.name)
+    .filter(Boolean) as string[];
+  const serviceLabel = serviceNames.join(" + ");
 
   // Auto-suggest project name from service + location.
   useEffect(() => {
     if (nameTouched) return;
     const place = neighborhood || city;
-    const parts = [serviceName, place && `on ${place}`].filter(Boolean);
+    const parts = [serviceLabel, place && `on ${place}`].filter(Boolean);
     setName(parts.join(" ").trim());
-  }, [serviceName, city, neighborhood, nameTouched]);
+  }, [serviceLabel, city, neighborhood, nameTouched]);
 
-  const pickServiceLine = (id: string) => {
-    const line = lines.find((l) => l.id === id);
-    setServiceLineId(id);
-    setServiceName(line?.name ?? "");
-  };
+  const toggleServiceLine = (id: string) =>
+    setServiceLineIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const canCreate = name.trim() && tag && (tag !== "nothing_special" || confirmNothing);
 
@@ -75,8 +75,8 @@ function NewProject() {
           name: name.trim() || "Untitled project",
           status,
           worthiness_tag,
-          service_line_id: serviceLineId || null,
-          service_type_detail: serviceName || null,
+          service_line_id: serviceLineIds[0] ?? null,
+          service_type_detail: serviceNames.join(", ") || null,
           location_city: city || null,
           location_neighborhood: neighborhood || null,
           customer_type: customerType || null,
@@ -101,10 +101,12 @@ function NewProject() {
       <Card className="space-y-5">
         {lines.length > 0 && (
           <div>
-            <label className="block text-sm font-medium mb-2">What service?</label>
+            <label className="block text-sm font-medium mb-2">
+              What service? <span className="text-muted-foreground font-normal">(pick all that apply)</span>
+            </label>
             <div className="flex flex-wrap gap-2">
               {lines.map((l) => (
-                <Chip key={l.id} active={serviceLineId === l.id} onClick={() => pickServiceLine(l.id)}>
+                <Chip key={l.id} active={serviceLineIds.includes(l.id)} onClick={() => toggleServiceLine(l.id)}>
                   {l.name}
                 </Chip>
               ))}
