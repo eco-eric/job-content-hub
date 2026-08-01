@@ -46,7 +46,10 @@ function ProjectHub() {
   const requiredDone = questions
     .filter(q => q.required)
     .every(q => isFilled((project as Record<string, unknown>)[q.column], ARRAY_COLUMNS.has(q.column)));
-  const tagLabel = WORTHINESS_TAGS.find(t => t.id === project.worthiness_tag)?.label;
+  const tagLabel =
+    project.worthiness_tag === "custom"
+      ? (project as { worthiness_note?: string | null }).worthiness_note || "Custom reason"
+      : WORTHINESS_TAGS.find(t => t.id === project.worthiness_tag)?.label;
 
   const markReady = async () => {
     await supabase.from("projects").update({ status: "ready", completed_at: new Date().toISOString() }).eq("id", projectId);
