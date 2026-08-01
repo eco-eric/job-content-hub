@@ -154,7 +154,7 @@ function NewProject() {
 
       <div className="mt-8">
         <h2 className="text-lg font-medium">What made this job worth talking about?</h2>
-        <p className="text-sm text-muted-foreground mt-1">Pick one. It decides what the interview asks next.</p>
+        <p className="text-sm text-muted-foreground mt-1">Pick one, or write your own. It decides what the interview asks next.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {WORTHINESS_TAGS.map((t) => (
             <Chip key={t.id} active={tag === t.id} onClick={() => { setTag(t.id); setConfirmNothing(false); }}>
@@ -164,7 +164,21 @@ function NewProject() {
           <Chip active={tag === "nothing_special"} onClick={() => { setTag("nothing_special"); setConfirmNothing(false); }}>
             Nothing special
           </Chip>
+          <Chip active={tag === "custom"} onClick={() => { setTag("custom"); setConfirmNothing(false); }}>
+            Something else
+          </Chip>
         </div>
+        {tag === "custom" && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-2">In your words, what made it worth talking about?</label>
+            <input
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
+              placeholder="e.g. We beat a 3-day parts delay with a temporary fix"
+              className={inp}
+            />
+          </div>
+        )}
         {tag === "nothing_special" && (
           <Card className="mt-4 border-muted">
             <p className="text-sm">
