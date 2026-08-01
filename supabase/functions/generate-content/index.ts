@@ -436,28 +436,25 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: auth } } },
     );
-    // Service role: used to load full project/company/intent rows server-side.
-    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { projectId, intent, channel, length, tone, audience: audienceIn } = await req.json();
     const audience = (audienceIn && typeof audienceIn === "string" ? audienceIn : "homeowner");
 
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "content-type": "application/json" } });
 
-    const { data: project } = await admin.from("projects").select("*").eq("id", projectId).single();
+    // RLS ("own projects") scopes this read to the caller: non-owned ids come back null.
+    const { data: project } = await userClient.from("projects").select("*").eq("id", projectId).maybeSingle();
     if (!project) return new Response(JSON.stringify({ error: "Project not found" }), { status: 404, headers: { ...cors, "content-type": "application/json" } });
 
     const companyId = (project as { company_id: string }).company_id;
-    // Auth check: caller must own the company.
-    const { data: company } = await admin.from("companies").select("*").eq("id", companyId).maybeSingle();
-    if (!company || (company as { owner_user_id: string }).owner_user_id !== user.id) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "content-type": "application/json" } });
-    }
+    // RLS (auth.uid() = owner_user_id) scopes the company read to the caller.
+    const { data: company } = await userClient.from("companies").select("*").eq("id", companyId).maybeSingle();
+    if (!company) return new Response(JSON.stringify({ error: "Project not found" }), { status: 404, headers: { ...cors, "content-type": "application/json" } });
 
     const tones = ((company as { audience_tone_modifiers?: Record<string, string> }).audience_tone_modifiers) ?? {};
     const audienceTone = (tones[audience] && String(tones[audience]).trim()) || DEFAULT_AUDIENCE_TONES[audience] || DEFAULT_AUDIENCE_TONES.homeowner;
 
-    const { data: intentRow } = await admin
+    const { data: intentRow } = await userClient
       .from("content_intents")
       .select("notes")
       .eq("project_id", projectId)
