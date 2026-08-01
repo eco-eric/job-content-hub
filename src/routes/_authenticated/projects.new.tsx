@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Card, Chip, PageHeader, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { WORTHINESS_TAGS } from "@/lib/constants";
 import { ensureCompany } from "@/lib/company";
+import { errorMessage } from "@/lib/utils";
 
 type ServiceLine = { id: string; name: string };
 
@@ -87,7 +88,7 @@ function NewProject() {
       if (isNothing) nav({ to: "/dashboard" });
       else nav({ to: "/projects/$projectId/interview", params: { projectId: data.id } });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }

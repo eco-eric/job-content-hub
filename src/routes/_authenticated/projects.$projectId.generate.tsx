@@ -18,6 +18,7 @@ import {
   type AudienceId,
 } from "@/lib/constants";
 import { generateContent } from "@/lib/generation";
+import { errorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId/generate")({
   component: Generate,
@@ -143,7 +144,7 @@ function Generate() {
       if (firstAssetId) nav({ to: "/content/$contentId", params: { contentId: firstAssetId } });
       else nav({ to: "/projects/$projectId", params: { projectId } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

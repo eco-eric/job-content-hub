@@ -15,6 +15,7 @@ import {
 } from "@/lib/constants";
 import { generateContent, type LengthVariant, type ToneOverride } from "@/lib/generation";
 import { Copy, Download, AlertCircle, RefreshCw } from "lucide-react";
+import { errorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/content/$contentId")({
   component: ContentEditor,
@@ -129,7 +130,7 @@ function ContentEditor() {
         .eq("id", contentId);
       qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -166,7 +167,7 @@ function ContentEditor() {
       qc.invalidateQueries({ queryKey: ["content-asset", contentId] });
       setAudienceSwitch(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(null);
     }
