@@ -62,10 +62,13 @@ function ContentEditor() {
     () => (Array.isArray(c?.flagged_unknowns) ? (c!.flagged_unknowns as Confirm[]) : []),
     [c?.flagged_unknowns],
   );
-  // Unresolved = still present in current body text.
+  // Unresolved = still present in current body text. The body contains the PROMPT text, not the slug key.
   const remaining = confirms.filter(
-    (cf) => body.includes(`[confirm: ${cf.key}]`) || body.includes(`[confirm:${cf.key}]`),
+    (cf) => body.includes(`[confirm: ${cf.prompt}]`) || body.includes(`[confirm:${cf.prompt}]`),
   );
+  // Safety net: any surviving confirm marker at all, even if flagged_unknowns drifted.
+  const hasAnyMarker = /\[confirm:/i.test(body);
+  const canFinalize = remaining.length === 0 && !hasAnyMarker;
 
   // Click-to-resolve inline chips for [confirm: …] tokens.
   const resolveInline = async (key: string, replacement: string) => {
@@ -336,13 +339,18 @@ function ContentEditor() {
           <SecondaryButton onClick={() => regenerate()} disabled={busy !== null}>
             <RefreshCw className={"h-4 w-4" + (busy === "regen" ? " animate-spin" : "")} /> Regenerate
           </SecondaryButton>
-          <SecondaryButton onClick={() => setStatus("approved")} disabled={remaining.length > 0 || c.status === "approved"}>
+          <SecondaryButton onClick={() => setStatus("approved")} disabled={!canFinalize || c.status === "approved"}>
             Approve
           </SecondaryButton>
+          {hasAnyMarker && remaining.length === 0 && (
+            <p className="w-full md:w-auto self-center text-xs text-destructive">
+              Unresolved [confirm: …] markers are still in the body. Remove them before approving.
+            </p>
+          )}
           <div className="ml-auto flex gap-2">
             <SecondaryButton onClick={copyText}><Copy className="h-4 w-4" /> Copy</SecondaryButton>
-            <SecondaryButton onClick={() => download("md")}><Download className="h-4 w-4" /> .md</SecondaryButton>
-            <SecondaryButton onClick={() => download("txt")}><Download className="h-4 w-4" /> .txt</SecondaryButton>
+            <SecondaryButton onClick={() => download("md")} disabled={!canFinalize}><Download className="h-4 w-4" /> .md</SecondaryButton>
+            <SecondaryButton onClick={() => download("txt")} disabled={!canFinalize}><Download className="h-4 w-4" /> .txt</SecondaryButton>
           </div>
         </div>
       </div>
