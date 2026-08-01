@@ -66,7 +66,7 @@ function NewProject() {
     try {
       const company = await ensureCompany(user.id);
       const isNothing = tag === "nothing_special";
-      const status = isNothing ? "archived" : "interviewing";
+      const status = isNothing ? "archived" : "draft";
       const worthiness_tag = isNothing ? null : tag;
       const { data, error } = await supabase
         .from("projects")

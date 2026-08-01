@@ -103,7 +103,7 @@ function Interview() {
     const draftProject = { ...(project as Record<string, unknown>), ...payload };
     const state = computeState(questions, draftProject);
     payload.interview_state = state;
-    if (project.status === "triaging" || project.status === "draft") payload.status = "interviewing";
+    // status stays "draft" until the interview is completed (DB allows draft/ready/archived only)
     await supabase.from("projects").update(payload as never).eq("id", projectId);
     qc.invalidateQueries({ queryKey: ["project", projectId] });
   };
