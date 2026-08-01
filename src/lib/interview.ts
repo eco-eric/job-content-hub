@@ -43,9 +43,8 @@ export const LAYER_1: Question[] = [
     id: "service",
     column: "service_type_detail",
     prompt: "What service did you perform?",
-    hint: "Tap a chip or type it in.",
+    hint: "Tap all that apply, or type it in.",
     chips: "service_lines",
-    chipMode: "replace",
     required: true,
   },
   {
