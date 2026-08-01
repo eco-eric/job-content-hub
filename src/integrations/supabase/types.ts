@@ -248,6 +248,7 @@ export type Database = {
           status: string
           unusual_details: string | null
           updated_at: string
+          worthiness_note: string | null
           worthiness_tag: string | null
         }
         Insert: {
@@ -275,6 +276,7 @@ export type Database = {
           status?: string
           unusual_details?: string | null
           updated_at?: string
+          worthiness_note?: string | null
           worthiness_tag?: string | null
         }
         Update: {
@@ -302,6 +304,7 @@ export type Database = {
           status?: string
           unusual_details?: string | null
           updated_at?: string
+          worthiness_note?: string | null
           worthiness_tag?: string | null
         }
         Relationships: [
