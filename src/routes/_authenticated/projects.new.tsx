@@ -31,6 +31,7 @@ function NewProject() {
   const [nameTouched, setNameTouched] = useState(false);
 
   const [tag, setTag] = useState<string | null>(null);
+  const [customReason, setCustomReason] = useState("");
   const [confirmNothing, setConfirmNothing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -57,7 +58,11 @@ function NewProject() {
   const toggleServiceLine = (id: string) =>
     setServiceLineIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const canCreate = name.trim() && tag && (tag !== "nothing_special" || confirmNothing);
+  const canCreate =
+    name.trim() &&
+    tag &&
+    (tag !== "nothing_special" || confirmNothing) &&
+    (tag !== "custom" || customReason.trim().length > 0);
 
   const create = async () => {
     if (!user || !canCreate) return;
@@ -75,6 +80,7 @@ function NewProject() {
           name: name.trim() || "Untitled project",
           status,
           worthiness_tag,
+          worthiness_note: tag === "custom" ? customReason.trim() : null,
           service_line_id: serviceLineIds[0] ?? null,
           service_type_detail: serviceNames.join(", ") || null,
           location_city: city || null,
