@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
   const { user, loading } = useAuth();
   const nav = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     if (!loading && !user) nav({ to: "/login" });
@@ -28,11 +29,10 @@ function AuthLayout() {
     const c = companyQ.data;
     const examples = Array.isArray(c?.voice_examples) ? c!.voice_examples : [];
     const onboarded = c && c.name && examples.length > 0;
-    const path = typeof window !== "undefined" ? window.location.pathname : "";
-    if (!onboarded && path !== "/onboarding" && path !== "/settings") {
+    if (!onboarded && pathname !== "/onboarding" && pathname !== "/settings") {
       nav({ to: "/onboarding" });
     }
-  }, [user, companyQ.isLoading, companyQ.data, nav]);
+  }, [user, companyQ.isLoading, companyQ.data, pathname, nav]);
 
   if (loading || !user) {
     return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;

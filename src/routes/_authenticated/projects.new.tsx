@@ -38,7 +38,7 @@ function NewProject() {
 
   const companyQ = useQuery({
     enabled: !!user,
-    queryKey: ["company", user?.id],
+    queryKey: ["company-service-lines", user?.id],
     queryFn: async () => (await supabase.from("companies").select("id,service_lines").eq("owner_user_id", user!.id).maybeSingle()).data,
   });
   const lines = (Array.isArray(companyQ.data?.service_lines) ? companyQ.data!.service_lines : []) as unknown as ServiceLine[];
