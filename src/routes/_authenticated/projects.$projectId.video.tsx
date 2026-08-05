@@ -146,8 +146,11 @@ function VideoWalkthrough() {
   };
 
   const applyField = async (key: keyof Fields, value: string | string[]) => {
-    const patch: Record<string, unknown> = { [key]: value };
-    const { error: ue } = await supabase.from("projects").update(patch).eq("id", projectId);
+    const patch = { [key]: value } as Partial<Record<keyof Fields, string | string[]>>;
+    const { error: ue } = await supabase
+      .from("projects")
+      .update(patch as never)
+      .eq("id", projectId);
     if (ue) { setError(errorMessage(ue)); return; }
     setApplied((m) => ({ ...m, [key]: true }));
     qc.invalidateQueries({ queryKey: ["project", projectId] });
