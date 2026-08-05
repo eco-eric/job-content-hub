@@ -195,6 +195,8 @@ export type Database = {
           duration_seconds: number | null
           id: string
           project_id: string
+          segment_count: number
+          segments: Json
           tag: string
           transcript: string | null
           type: string
@@ -210,6 +212,8 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           project_id: string
+          segment_count?: number
+          segments?: Json
           tag: string
           transcript?: string | null
           type: string
@@ -225,6 +229,8 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           project_id?: string
+          segment_count?: number
+          segments?: Json
           tag?: string
           transcript?: string | null
           type?: string
