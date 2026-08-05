@@ -7,14 +7,15 @@ import { useAuth } from "@/lib/auth-context";
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { analyzeWalkthrough } from "@/lib/video.functions";
 import { errorMessage } from "@/lib/utils";
+import { canSegment, segmentVideo, SEGMENT_SECONDS, MAX_SOURCE_SECONDS, MAX_SOURCE_BYTES } from "@/lib/video-segment";
 import { Trash2, Upload, Sparkles, FileText, Check } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId/video")({
   component: VideoWalkthrough,
 });
 
-const MAX_BYTES = 20 * 1024 * 1024;
-const MAX_SECONDS = 125; // 2 minutes with a little slack
+const SINGLE_MAX_BYTES = 20 * 1024 * 1024;
+const SINGLE_MAX_SECONDS = 125; // one clip fits in a single AI request
 
 type Fields = {
   before_state?: string;
@@ -33,6 +34,7 @@ type Analysis = {
   fields?: Fields;
   open_questions?: string[];
   source?: string;
+  segments?: Array<{ index: number; start_seconds: number; status: string; error?: string | null }>;
 };
 
 const FIELD_LABELS: Record<keyof Fields, string> = {
@@ -65,6 +67,7 @@ function VideoWalkthrough() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [busy, setBusy] = useState(false);
+  const [prep, setPrep] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState<Record<string, boolean>>({});
@@ -94,42 +97,70 @@ function VideoWalkthrough() {
     if (!file || !user) return;
     setError(null);
 
-    if (file.size > MAX_BYTES) {
-      setError(`That clip is ${(file.size / 1024 / 1024).toFixed(0)} MB. Keep walkthroughs under 20 MB (about 2 minutes).`);
+    const seconds = await readDuration(file);
+    const splittable = canSegment();
+    const needsSplit = seconds > SINGLE_MAX_SECONDS || file.size > SINGLE_MAX_BYTES;
+
+    if (file.size > MAX_SOURCE_BYTES) {
+      setError(`That clip is ${(file.size / 1024 / 1024).toFixed(0)} MB. Keep walkthroughs under 200 MB.`);
       return;
     }
-    const seconds = await readDuration(file);
-    if (seconds > MAX_SECONDS) {
-      setError(`That clip is ${Math.round(seconds)} seconds. Keep walkthroughs under 2 minutes for now.`);
+    if (seconds > MAX_SOURCE_SECONDS) {
+      setError(`That clip is ${Math.round(seconds / 60)} minutes. Keep walkthroughs under 10 minutes for now.`);
+      return;
+    }
+    if (needsSplit && !splittable) {
+      setError("This browser can't split long clips. Record a shorter walkthrough (under 2 minutes) or try Chrome.");
       return;
     }
 
     setBusy(true);
-    const path = `${user.id}/${projectId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-    const up = await supabase.storage.from("project-videos").upload(path, file, { contentType: file.type || "video/mp4" });
-    if (up.error) {
-      setError(errorMessage(up.error));
-    } else {
+    const base = `${user.id}/${projectId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    try {
+      const up = await supabase.storage.from("project-videos").upload(base, file, { contentType: file.type || "video/mp4" });
+      if (up.error) throw up.error;
+
+      let segments: Array<{ index: number; path: string; start_seconds: number; duration_seconds: number }> = [];
+
+      if (needsSplit) {
+        const parts = await segmentVideo(file, {
+          onProgress: (done, total) => setPrep(`Preparing part ${done} of ${total}…`),
+        });
+        setPrep("Uploading parts…");
+        for (const part of parts) {
+          const path = `${base}.segments/${String(part.index).padStart(2, "0")}.webm`;
+          const su = await supabase.storage.from("project-videos").upload(path, part.blob, { contentType: part.blob.type || "video/webm" });
+          if (su.error) throw su.error;
+          segments.push({ index: part.index, path, start_seconds: part.start_seconds, duration_seconds: part.duration_seconds });
+        }
+      }
+
       const ins = await supabase.from("media").insert({
         project_id: projectId,
-        url: path,
+        url: base,
         type: "video",
         tag: "process",
         duration_seconds: seconds ? Math.round(seconds) : null,
+        segments,
+        segment_count: segments.length,
       });
-      if (ins.error) setError(errorMessage(ins.error));
+      if (ins.error) throw ins.error;
       qc.invalidateQueries({ queryKey: ["videos", projectId] });
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPrep(null);
+      setBusy(false);
     }
-    setBusy(false);
   };
 
-  const analyze = async (mediaId: string) => {
+  const analyze = async (mediaId: string, onlySegments?: number[]) => {
     setError(null);
     setAnalyzingId(mediaId);
     setSavedDocId(null);
     setApplied({});
     try {
-      await runAnalysis({ data: { mediaId } });
+      await runAnalysis({ data: { mediaId, ...(onlySegments ? { onlySegments } : {}) } });
       await qc.invalidateQueries({ queryKey: ["videos", projectId] });
     } catch (e) {
       setError(errorMessage(e));
@@ -140,7 +171,9 @@ function VideoWalkthrough() {
   };
 
   const remove = async (id: string, path: string) => {
-    await supabase.storage.from("project-videos").remove([path]);
+    const { data: files } = await supabase.storage.from("project-videos").list(`${path}.segments`);
+    const paths = [path, ...(files ?? []).map((f) => `${path}.segments/${f.name}`)];
+    await supabase.storage.from("project-videos").remove(paths);
     await supabase.from("media").delete().eq("id", id);
     qc.invalidateQueries({ queryKey: ["videos", projectId] });
   };
@@ -215,10 +248,12 @@ function VideoWalkthrough() {
 
       <Card>
         <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border border-input bg-card px-4 py-3 hover:bg-accent text-sm font-medium">
-          <Upload className="h-4 w-4" /> {busy ? "Uploading…" : "Upload a walkthrough clip"}
+          <Upload className="h-4 w-4" /> {busy ? (prep ?? "Uploading…") : "Upload a walkthrough clip"}
           <input ref={inputRef} type="file" accept="video/*" capture="environment" onChange={onFile} className="hidden" />
         </label>
-        <p className="text-xs text-muted-foreground mt-3">Under 2 minutes and 20 MB. Talk through what you're seeing — the analysis uses both your narration and the picture.</p>
+        <p className="text-xs text-muted-foreground mt-3">
+          Up to 10 minutes. Anything over 2 minutes is split into {SEGMENT_SECONDS}-second parts right here in your browser — that takes about as long as the clip itself, so keep this tab open. Your original is kept as recorded.
+        </p>
       </Card>
 
       {error && <p className="text-sm text-destructive mt-4">{error}</p>}
@@ -249,6 +284,9 @@ function VideoWalkthrough() {
                       <Sparkles className="h-4 w-4" />
                       {running ? "Analyzing…" : isReady ? "Re-analyze" : "Analyze walkthrough"}
                     </PrimaryButton>
+                    {v.segment_count > 0 && (
+                      <span className="text-xs text-muted-foreground">{v.segment_count} parts will be sent for analysis.</span>
+                    )}
                     {isReady && (
                       <SecondaryButton onClick={() => saveAsDocument(analysis)} disabled={!!savedDocId}>
                         <FileText className="h-4 w-4" /> Save as document
@@ -265,6 +303,22 @@ function VideoWalkthrough() {
 
                   {isReady && (
                     <div className="mt-5 space-y-5">
+                      {(analysis.segments ?? []).filter((s) => s.status === "error").length > 0 && (
+                        <div className="rounded-md border border-destructive/40 p-3">
+                          <h3 className="text-xs uppercase tracking-wider text-destructive mb-2">Some parts failed</h3>
+                          <ul className="text-sm space-y-2">
+                            {(analysis.segments ?? []).filter((s) => s.status === "error").map((s) => (
+                              <li key={s.index} className="flex items-start justify-between gap-3">
+                                <span>Part {s.index + 1}: {s.error}</span>
+                                <SecondaryButton onClick={() => analyze(v.id, [s.index])} disabled={running} className="shrink-0">
+                                  Retry part
+                                </SecondaryButton>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
                       {(analysis.open_questions ?? []).length > 0 && (
                         <div>
                           <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Needs confirming</h3>
