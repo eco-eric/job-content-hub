@@ -248,10 +248,12 @@ function VideoWalkthrough() {
 
       <Card>
         <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border border-input bg-card px-4 py-3 hover:bg-accent text-sm font-medium">
-          <Upload className="h-4 w-4" /> {busy ? "Uploading…" : "Upload a walkthrough clip"}
+          <Upload className="h-4 w-4" /> {busy ? (prep ?? "Uploading…") : "Upload a walkthrough clip"}
           <input ref={inputRef} type="file" accept="video/*" capture="environment" onChange={onFile} className="hidden" />
         </label>
-        <p className="text-xs text-muted-foreground mt-3">Under 2 minutes and 20 MB. Talk through what you're seeing — the analysis uses both your narration and the picture.</p>
+        <p className="text-xs text-muted-foreground mt-3">
+          Up to 10 minutes. Anything over 2 minutes is split into {SEGMENT_SECONDS}-second parts right here in your browser — that takes about as long as the clip itself, so keep this tab open. Your original is kept as recorded.
+        </p>
       </Card>
 
       {error && <p className="text-sm text-destructive mt-4">{error}</p>}
@@ -282,6 +284,9 @@ function VideoWalkthrough() {
                       <Sparkles className="h-4 w-4" />
                       {running ? "Analyzing…" : isReady ? "Re-analyze" : "Analyze walkthrough"}
                     </PrimaryButton>
+                    {v.segment_count > 0 && (
+                      <span className="text-xs text-muted-foreground">{v.segment_count} parts will be sent for analysis.</span>
+                    )}
                     {isReady && (
                       <SecondaryButton onClick={() => saveAsDocument(analysis)} disabled={!!savedDocId}>
                         <FileText className="h-4 w-4" /> Save as document
@@ -298,6 +303,22 @@ function VideoWalkthrough() {
 
                   {isReady && (
                     <div className="mt-5 space-y-5">
+                      {(analysis.segments ?? []).filter((s) => s.status === "error").length > 0 && (
+                        <div className="rounded-md border border-destructive/40 p-3">
+                          <h3 className="text-xs uppercase tracking-wider text-destructive mb-2">Some parts failed</h3>
+                          <ul className="text-sm space-y-2">
+                            {(analysis.segments ?? []).filter((s) => s.status === "error").map((s) => (
+                              <li key={s.index} className="flex items-start justify-between gap-3">
+                                <span>Part {s.index + 1}: {s.error}</span>
+                                <SecondaryButton onClick={() => analyze(v.id, [s.index])} disabled={running} className="shrink-0">
+                                  Retry part
+                                </SecondaryButton>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
                       {(analysis.open_questions ?? []).length > 0 && (
                         <div>
                           <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Needs confirming</h3>
