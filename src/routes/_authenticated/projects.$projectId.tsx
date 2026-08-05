@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, PrimaryButton, SecondaryButton, StatusBadge } from "@/components/AppShell";
 import { questionsFor, ARRAY_COLUMNS } from "@/lib/interview";
 import { WORTHINESS_TAGS, CHANNELS, INTENTS } from "@/lib/constants";
-import { Image as ImageIcon, MessageSquare, Sparkles } from "lucide-react";
+import { Image as ImageIcon, MessageSquare, Sparkles, Video } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   component: ProjectHub,
@@ -26,7 +26,7 @@ function ProjectHub() {
   });
   const photosQ = useQuery({
     queryKey: ["media", projectId],
-    queryFn: async () => (await supabase.from("media").select("id").eq("project_id", projectId)).data ?? [],
+    queryFn: async () => (await supabase.from("media").select("id,type").eq("project_id", projectId)).data ?? [],
   });
   const contentQ = useQuery({
     queryKey: ["project-content", projectId],
@@ -64,7 +64,7 @@ function ProjectHub() {
         right={<StatusBadge status={project.status} />}
       />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <Link to="/projects/$projectId/interview" params={{ projectId }}>
           <Card className="h-full hover:border-foreground/40">
             <div className="flex items-start gap-3">
@@ -76,13 +76,26 @@ function ProjectHub() {
             </div>
           </Card>
         </Link>
+        <Link to="/projects/$projectId/video" params={{ projectId }}>
+          <Card className="h-full hover:border-foreground/40">
+            <div className="flex items-start gap-3">
+              <Video className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <div className="font-medium">Walkthrough video</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {(photosQ.data ?? []).filter(m => m.type === "video").length} uploaded · talk it through
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Link>
         <Link to="/projects/$projectId/photos" params={{ projectId }}>
           <Card className="h-full hover:border-foreground/40">
             <div className="flex items-start gap-3">
               <ImageIcon className="h-5 w-5 text-primary mt-0.5" />
               <div>
                 <div className="font-medium">Photos</div>
-                <div className="text-sm text-muted-foreground mt-1">{(photosQ.data ?? []).length} uploaded</div>
+                <div className="text-sm text-muted-foreground mt-1">{(photosQ.data ?? []).filter(m => m.type === "image").length} uploaded</div>
               </div>
             </div>
           </Card>

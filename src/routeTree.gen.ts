@@ -19,6 +19,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedContentContentIdRouteImport } from './routes/_authenticated/content.$contentId'
+import { Route as AuthenticatedProjectsProjectIdVideoRouteImport } from './routes/_authenticated/projects.$projectId.video'
 import { Route as AuthenticatedProjectsProjectIdPhotosRouteImport } from './routes/_authenticated/projects.$projectId.photos'
 import { Route as AuthenticatedProjectsProjectIdInterviewRouteImport } from './routes/_authenticated/projects.$projectId.interview'
 import { Route as AuthenticatedProjectsProjectIdGenerateRouteImport } from './routes/_authenticated/projects.$projectId.generate'
@@ -75,6 +76,12 @@ const AuthenticatedContentContentIdRoute =
     path: '/content/$contentId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedProjectsProjectIdVideoRoute =
+  AuthenticatedProjectsProjectIdVideoRouteImport.update({
+    id: '/video',
+    path: '/video',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRoute,
+  } as any)
 const AuthenticatedProjectsProjectIdPhotosRoute =
   AuthenticatedProjectsProjectIdPhotosRouteImport.update({
     id: '/photos',
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
+  '/projects/$projectId/video': typeof AuthenticatedProjectsProjectIdVideoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
+  '/projects/$projectId/video': typeof AuthenticatedProjectsProjectIdVideoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -137,6 +146,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$projectId/generate': typeof AuthenticatedProjectsProjectIdGenerateRoute
   '/_authenticated/projects/$projectId/interview': typeof AuthenticatedProjectsProjectIdInterviewRoute
   '/_authenticated/projects/$projectId/photos': typeof AuthenticatedProjectsProjectIdPhotosRoute
+  '/_authenticated/projects/$projectId/video': typeof AuthenticatedProjectsProjectIdVideoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
+    | '/projects/$projectId/video'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/generate'
     | '/projects/$projectId/interview'
     | '/projects/$projectId/photos'
+    | '/projects/$projectId/video'
   id:
     | '__root__'
     | '/'
@@ -182,6 +194,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$projectId/generate'
     | '/_authenticated/projects/$projectId/interview'
     | '/_authenticated/projects/$projectId/photos'
+    | '/_authenticated/projects/$projectId/video'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -262,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedContentContentIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/$projectId/video': {
+      id: '/_authenticated/projects/$projectId/video'
+      path: '/video'
+      fullPath: '/projects/$projectId/video'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdVideoRouteImport
+      parentRoute: typeof AuthenticatedProjectsProjectIdRoute
+    }
     '/_authenticated/projects/$projectId/photos': {
       id: '/_authenticated/projects/$projectId/photos'
       path: '/photos'
@@ -290,6 +310,7 @@ interface AuthenticatedProjectsProjectIdRouteChildren {
   AuthenticatedProjectsProjectIdGenerateRoute: typeof AuthenticatedProjectsProjectIdGenerateRoute
   AuthenticatedProjectsProjectIdInterviewRoute: typeof AuthenticatedProjectsProjectIdInterviewRoute
   AuthenticatedProjectsProjectIdPhotosRoute: typeof AuthenticatedProjectsProjectIdPhotosRoute
+  AuthenticatedProjectsProjectIdVideoRoute: typeof AuthenticatedProjectsProjectIdVideoRoute
 }
 
 const AuthenticatedProjectsProjectIdRouteChildren: AuthenticatedProjectsProjectIdRouteChildren =
@@ -300,6 +321,8 @@ const AuthenticatedProjectsProjectIdRouteChildren: AuthenticatedProjectsProjectI
       AuthenticatedProjectsProjectIdInterviewRoute,
     AuthenticatedProjectsProjectIdPhotosRoute:
       AuthenticatedProjectsProjectIdPhotosRoute,
+    AuthenticatedProjectsProjectIdVideoRoute:
+      AuthenticatedProjectsProjectIdVideoRoute,
   }
 
 const AuthenticatedProjectsProjectIdRouteWithChildren =
@@ -340,13 +363,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
