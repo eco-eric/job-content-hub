@@ -186,29 +186,47 @@ export type Database = {
       }
       media: {
         Row: {
+          analysis: Json
+          analysis_error: string | null
+          analysis_status: string
+          analyzed_at: string | null
           caption: string | null
           created_at: string
+          duration_seconds: number | null
           id: string
           project_id: string
           tag: string
+          transcript: string | null
           type: string
           url: string
         }
         Insert: {
+          analysis?: Json
+          analysis_error?: string | null
+          analysis_status?: string
+          analyzed_at?: string | null
           caption?: string | null
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           project_id: string
           tag: string
+          transcript?: string | null
           type: string
           url: string
         }
         Update: {
+          analysis?: Json
+          analysis_error?: string | null
+          analysis_status?: string
+          analyzed_at?: string | null
           caption?: string | null
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           project_id?: string
           tag?: string
+          transcript?: string | null
           type?: string
           url?: string
         }
