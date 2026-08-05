@@ -47,14 +47,17 @@ const JSON_SHAPE = `Return ONLY a JSON object (no code fences, no commentary) wi
 }
 Leave any "fields" value empty ("" or []) when the recording does not support it. Never fill a field with a guess.`;
 
-function videoPrompt(): string {
+function videoPrompt(segment?: { index: number; total: number }): string {
   return [
     "You are documenting a trade technician's walkthrough recording.",
     "The speaker is narrating while walking through a property or a job.",
+    segment && segment.total > 1
+      ? `This is part ${segment.index + 1} of ${segment.total} of one longer recording. Timestamp everything relative to the START OF THIS PART (it begins at 00:00). Do not try to guess what happened in other parts.`
+      : "",
     HARD_RULES,
     "Transcribe what is said, and describe what is actually shown on camera, keeping both tied to timestamps.",
     JSON_SHAPE,
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function transcriptPrompt(transcript: string): string {
