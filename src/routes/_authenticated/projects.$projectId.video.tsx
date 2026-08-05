@@ -7,14 +7,15 @@ import { useAuth } from "@/lib/auth-context";
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/AppShell";
 import { analyzeWalkthrough } from "@/lib/video.functions";
 import { errorMessage } from "@/lib/utils";
+import { canSegment, segmentVideo, SEGMENT_SECONDS, MAX_SOURCE_SECONDS, MAX_SOURCE_BYTES } from "@/lib/video-segment";
 import { Trash2, Upload, Sparkles, FileText, Check } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId/video")({
   component: VideoWalkthrough,
 });
 
-const MAX_BYTES = 20 * 1024 * 1024;
-const MAX_SECONDS = 125; // 2 minutes with a little slack
+const SINGLE_MAX_BYTES = 20 * 1024 * 1024;
+const SINGLE_MAX_SECONDS = 125; // one clip fits in a single AI request
 
 type Fields = {
   before_state?: string;
@@ -33,6 +34,7 @@ type Analysis = {
   fields?: Fields;
   open_questions?: string[];
   source?: string;
+  segments?: Array<{ index: number; start_seconds: number; status: string; error?: string | null }>;
 };
 
 const FIELD_LABELS: Record<keyof Fields, string> = {
