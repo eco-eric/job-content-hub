@@ -158,14 +158,19 @@ async function chat(apiKey: string, body: Record<string, unknown>): Promise<stri
 }
 
 /** Full video understanding: the model sees the frames AND hears the narration. */
-export async function analyzeVideoDirect(apiKey: string, bytes: Uint8Array, mime: string): Promise<string> {
+export async function analyzeVideoDirect(
+  apiKey: string,
+  bytes: Uint8Array,
+  mime: string,
+  segment?: { index: number; total: number },
+): Promise<string> {
   const base64 = bytesToBase64(bytes);
   return chat(apiKey, {
     model: VIDEO_MODEL,
     messages: [{
       role: "user",
       content: [
-        { type: "text", text: videoPrompt() },
+        { type: "text", text: videoPrompt(segment) },
         { type: "file", file: { filename: `walkthrough.${mime.split("/")[1] ?? "mp4"}`, file_data: `data:${mime};base64,${base64}` } },
       ],
     }],
@@ -198,3 +203,116 @@ export async function documentFromTranscript(apiKey: string, transcript: string)
 }
 
 export const MODELS = { video: VIDEO_MODEL, transcribe: TRANSCRIBE_MODEL };
+
+// ---------------------------------------------------------------------------
+// Multi-segment merging
+// ---------------------------------------------------------------------------
+
+type Parsed = Omit<WalkthroughAnalysis, "source" | "model" | "version">;
+
+function fmt(total: number): string {
+  const s = Math.max(0, Math.round(total));
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/** Rewrite every [mm:ss] / [hh:mm:ss] marker so it is relative to the whole recording. */
+export function rebaseTimestamps(text: string, offsetSeconds: number): string {
+  if (!offsetSeconds) return text;
+  return text.replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/g, (_m, a: string, b: string, c?: string) => {
+    const seconds = c
+      ? Number(a) * 3600 + Number(b) * 60 + Number(c)
+      : Number(a) * 60 + Number(b);
+    return `[${fmt(seconds + offsetSeconds)}]`;
+  });
+}
+
+function section(markdown: string, heading: string): string {
+  const re = new RegExp(`^##\\s+${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "im");
+  return (markdown.match(re)?.[1] ?? "").trim();
+}
+
+function uniq(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    const k = v.trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(v.trim());
+  }
+  return out;
+}
+
+function joinSentences(values: string[]): string {
+  const kept = uniq(values.filter(Boolean));
+  return kept.join(" ").trim();
+}
+
+export type SegmentResult = {
+  index: number;
+  start_seconds: number;
+  parsed?: Parsed;
+  error?: string;
+};
+
+/** Merge per-segment results into one continuous analysis. */
+export function mergeSegmentAnalyses(results: SegmentResult[]): Parsed {
+  const ordered = [...results].sort((a, b) => a.index - b.index);
+  const ok = ordered.filter((r) => r.parsed);
+
+  const transcript = ok
+    .map((r) => rebaseTimestamps(r.parsed!.transcript, r.start_seconds))
+    .filter(Boolean)
+    .join("\n\n");
+
+  const walkthrough: string[] = [];
+  const observed: string[] = [];
+  const overview: string[] = [];
+  for (const r of ok) {
+    const md = rebaseTimestamps(r.parsed!.document_markdown, r.start_seconds);
+    const w = section(md, "Walkthrough");
+    const e = section(md, "Equipment and conditions observed");
+    const o = section(md, "Overview");
+    if (w) walkthrough.push(w);
+    if (e) observed.push(e);
+    if (o) overview.push(o);
+    if (!w && !e && !o) walkthrough.push(md);
+  }
+
+  const gaps = ordered.filter((r) => r.error);
+  const openQuestions = uniq(ok.flatMap((r) => r.parsed!.open_questions));
+
+  const doc = [
+    "# Walkthrough notes",
+    overview.length ? `## Overview\n${overview.join("\n\n")}` : "",
+    gaps.length
+      ? `## Gaps\n${gaps.map((g) => `- Part ${g.index + 1} (from ${fmt(g.start_seconds)}) could not be analyzed: ${g.error}`).join("\n")}`
+      : "",
+    walkthrough.length ? `## Walkthrough\n${walkthrough.join("\n")}` : "",
+    observed.length ? `## Equipment and conditions observed\n${observed.join("\n")}` : "",
+    openQuestions.length ? `## Open questions\n${openQuestions.map((q) => `- ${q}`).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  const pick = (key: keyof WalkthroughFields): string =>
+    joinSentences(ok.map((r) => (r.parsed!.fields[key] as string | undefined) ?? ""));
+  const union = (key: "equipment_used" | "materials_used"): string[] =>
+    uniq(ok.flatMap((r) => r.parsed!.fields[key] ?? []));
+
+  return {
+    transcript,
+    document_markdown: doc,
+    open_questions: openQuestions,
+    fields: {
+      before_state: pick("before_state"),
+      scope_performed: pick("scope_performed"),
+      outcome: pick("outcome"),
+      equipment_used: union("equipment_used"),
+      materials_used: union("materials_used"),
+      unusual_details: pick("unusual_details"),
+      lesson_learned: pick("lesson_learned"),
+      customer_quote: pick("customer_quote"),
+    },
+  };
+}
